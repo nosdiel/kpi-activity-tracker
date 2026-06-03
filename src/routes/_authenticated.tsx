@@ -49,9 +49,9 @@ function AuthenticatedLayout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen bg-background">
       <aside
-        className="hidden w-60 shrink-0 p-4 md:flex md:flex-col"
+        className="hidden w-60 shrink-0 p-4 md:flex md:flex-col md:sticky md:top-0 md:h-screen"
         style={{ backgroundColor: "#0a2a5e", color: "#ffffff" }}
       >
         <div className="mb-6 px-2">
