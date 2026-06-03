@@ -42,3 +42,17 @@ from (values
 where not exists (
   select 1 from public.pnl_vendors p where p.name = v.name and p.section = v.section
 );
+
+-- Ensure unique constraint on weekly_pnl for upsert by (location_id, fiscal_year, fiscal_week).
+do $$
+begin
+  if not exists (
+    select 1 from pg_constraint
+    where conname = 'weekly_pnl_location_fy_fw_key'
+      and conrelid = 'public.weekly_pnl'::regclass
+  ) then
+    alter table public.weekly_pnl
+      add constraint weekly_pnl_location_fy_fw_key
+      unique (location_id, fiscal_year, fiscal_week);
+  end if;
+end$$;
