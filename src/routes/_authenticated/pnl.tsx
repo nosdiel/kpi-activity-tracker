@@ -435,7 +435,7 @@ function WeeklyPnlPage() {
           </Row>
 
 
-          <div className="bg-foreground text-background px-6 py-4 flex items-center justify-between">
+          <div className="bg-[#0a1f4a] text-white px-6 py-4 flex items-center justify-between">
             <span className="font-semibold">Total Cost of Goods</span>
             <div className="flex items-center gap-6">
               <span className="font-semibold tabular-nums">{money(totalCogs)}</span>
