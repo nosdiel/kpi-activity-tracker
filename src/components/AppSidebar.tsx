@@ -13,7 +13,7 @@ const nav = [
   { to: "/targets", label: "Targets", icon: Target },
   { to: "/pnl", label: "P&L Weekly", icon: FileBarChart },
   { to: "/pnl-qtr", label: "P&L Quarterly", icon: CalendarRange },
-  { to: "/pnl-bonus", label: "P&L Bonus", icon: Award },
+  { to: "/pnl-bonus", label: "Bonus Calculator", icon: Award },
   { to: "/users", label: "Users", icon: Users },
   { to: "/permissions", label: "Permissions", icon: Shield },
   { to: "/who-to-call", label: "Who to Call", icon: Phone },
