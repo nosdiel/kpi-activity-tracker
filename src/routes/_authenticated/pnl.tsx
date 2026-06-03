@@ -372,10 +372,11 @@ function WeeklyPnlPage() {
           <TotalRow label="Total Sales" value={money(totalSales)} />
 
           <SectionHeader label="Payroll" />
-          <Row label="Wages">
+          <Row label="Wages" i={0}>
             <AmountInput value={wages} onChange={setWages} />
             <PctCell>{pctFmt(pctOf(wagesN))}</PctCell>
           </Row>
+
           <TotalRow label="Total Payroll 20%" value={money(wagesN)} pct={pctFmt(pctOf(wagesN))} />
 
           <SectionHeader label="Food Cost" />
