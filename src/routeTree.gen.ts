@@ -19,6 +19,7 @@ import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/
 import { Route as AuthenticatedToastRouteImport } from './routes/_authenticated/toast'
 import { Route as AuthenticatedTargetsRouteImport } from './routes/_authenticated/targets'
 import { Route as AuthenticatedSquareRouteImport } from './routes/_authenticated/square'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 import { Route as AuthenticatedPnlQtrRouteImport } from './routes/_authenticated/pnl-qtr'
 import { Route as AuthenticatedPnlBonusRouteImport } from './routes/_authenticated/pnl-bonus'
 import { Route as AuthenticatedPnlRouteImport } from './routes/_authenticated/pnl'
@@ -76,6 +77,11 @@ const AuthenticatedSquareRoute = AuthenticatedSquareRouteImport.update({
   path: '/square',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const AuthenticatedPnlQtrRoute = AuthenticatedPnlQtrRouteImport.update({
   id: '/pnl-qtr',
   path: '/pnl-qtr',
@@ -124,6 +130,7 @@ export interface FileRoutesByFullPath {
   '/pnl': typeof AuthenticatedPnlRoute
   '/pnl-bonus': typeof AuthenticatedPnlBonusRoute
   '/pnl-qtr': typeof AuthenticatedPnlQtrRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/square': typeof AuthenticatedSquareRoute
   '/targets': typeof AuthenticatedTargetsRoute
   '/toast': typeof AuthenticatedToastRoute
@@ -142,6 +149,7 @@ export interface FileRoutesByTo {
   '/pnl': typeof AuthenticatedPnlRoute
   '/pnl-bonus': typeof AuthenticatedPnlBonusRoute
   '/pnl-qtr': typeof AuthenticatedPnlQtrRoute
+  '/settings': typeof AuthenticatedSettingsRoute
   '/square': typeof AuthenticatedSquareRoute
   '/targets': typeof AuthenticatedTargetsRoute
   '/toast': typeof AuthenticatedToastRoute
@@ -162,6 +170,7 @@ export interface FileRoutesById {
   '/_authenticated/pnl': typeof AuthenticatedPnlRoute
   '/_authenticated/pnl-bonus': typeof AuthenticatedPnlBonusRoute
   '/_authenticated/pnl-qtr': typeof AuthenticatedPnlQtrRoute
+  '/_authenticated/settings': typeof AuthenticatedSettingsRoute
   '/_authenticated/square': typeof AuthenticatedSquareRoute
   '/_authenticated/targets': typeof AuthenticatedTargetsRoute
   '/_authenticated/toast': typeof AuthenticatedToastRoute
@@ -182,6 +191,7 @@ export interface FileRouteTypes {
     | '/pnl'
     | '/pnl-bonus'
     | '/pnl-qtr'
+    | '/settings'
     | '/square'
     | '/targets'
     | '/toast'
@@ -200,6 +210,7 @@ export interface FileRouteTypes {
     | '/pnl'
     | '/pnl-bonus'
     | '/pnl-qtr'
+    | '/settings'
     | '/square'
     | '/targets'
     | '/toast'
@@ -219,6 +230,7 @@ export interface FileRouteTypes {
     | '/_authenticated/pnl'
     | '/_authenticated/pnl-bonus'
     | '/_authenticated/pnl-qtr'
+    | '/_authenticated/settings'
     | '/_authenticated/square'
     | '/_authenticated/targets'
     | '/_authenticated/toast'
@@ -306,6 +318,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSquareRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/pnl-qtr': {
       id: '/_authenticated/pnl-qtr'
       path: '/pnl-qtr'
@@ -366,6 +385,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPnlRoute: typeof AuthenticatedPnlRoute
   AuthenticatedPnlBonusRoute: typeof AuthenticatedPnlBonusRoute
   AuthenticatedPnlQtrRoute: typeof AuthenticatedPnlQtrRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRoute
   AuthenticatedSquareRoute: typeof AuthenticatedSquareRoute
   AuthenticatedTargetsRoute: typeof AuthenticatedTargetsRoute
   AuthenticatedToastRoute: typeof AuthenticatedToastRoute
@@ -381,6 +401,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPnlRoute: AuthenticatedPnlRoute,
   AuthenticatedPnlBonusRoute: AuthenticatedPnlBonusRoute,
   AuthenticatedPnlQtrRoute: AuthenticatedPnlQtrRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRoute,
   AuthenticatedSquareRoute: AuthenticatedSquareRoute,
   AuthenticatedTargetsRoute: AuthenticatedTargetsRoute,
   AuthenticatedToastRoute: AuthenticatedToastRoute,
