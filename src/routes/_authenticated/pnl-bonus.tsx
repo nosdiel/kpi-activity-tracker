@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export const Route = createFileRoute("/_authenticated/pnl-bonus")({
-  head: () => ({ meta: [{ title: "P&L Bonus — NiNi KPI" }] }),
+  head: () => ({ meta: [{ title: "Bonus Calculator — NiNi KPI" }] }),
   component: BonusPage,
 });
 
@@ -68,7 +68,7 @@ function BonusPage() {
     <div className="space-y-6">
       <div>
         <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">NiNi - KPI</p>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">P&L — Bonus</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">Bonus Calculator</h1>
         <p className="text-sm text-muted-foreground mt-1">Trailing 12 months. Bonus = profit × bonus %.</p>
       </div>
 
