@@ -62,6 +62,15 @@ function LocationsPage() {
     },
   });
 
+  const regionsQ = useQuery({
+    queryKey: ["regions", "all"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("regions").select("id,name").order("name");
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
+    },
+  });
+
   const saveMut = useMutation({
     mutationFn: async (f: FormState) => {
       const payload = {
