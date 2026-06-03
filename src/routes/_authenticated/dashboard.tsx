@@ -12,6 +12,7 @@ import {
 } from "recharts";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
+  ssr: false,
   head: () => ({ meta: [{ title: "Dashboard — NiNi KPI" }] }),
   component: DashboardPage,
 });
