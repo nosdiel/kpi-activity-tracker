@@ -36,6 +36,12 @@ type WeeklyPnlRow = {
   repairs: number | null;
 };
 
+const DEFAULT_FOOD_VENDORS: readonly string[] = [
+  "Sysco", "The Cafe Group", "CBI", "All Coffee",
+  "Cortes (Soda)", "CP Oil (Veg, Oil)", "Vicky Enterprises", "Joy's Kitchen",
+];
+const DEFAULT_PAPER_VENDORS: readonly string[] = ["All Florida Paper", "Dade Paper"];
+
 const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n: number) => `${(n * 100).toFixed(2)}%`;
