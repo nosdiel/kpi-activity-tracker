@@ -9,38 +9,174 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthenticatedPnlQtrRouteImport } from './routes/_authenticated/pnl-qtr'
+import { Route as AuthenticatedPnlBonusRouteImport } from './routes/_authenticated/pnl-bonus'
+import { Route as AuthenticatedPnlRouteImport } from './routes/_authenticated/pnl'
+import { Route as AuthenticatedPermissionsRouteImport } from './routes/_authenticated/permissions'
+import { Route as AuthenticatedLocationsRouteImport } from './routes/_authenticated/locations'
+import { Route as AuthenticatedDessertsRouteImport } from './routes/_authenticated/desserts'
+import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthCallbackRoute = AuthCallbackRouteImport.update({
+  id: '/callback',
+  path: '/callback',
+  getParentRoute: () => AuthRoute,
+} as any)
+const AuthenticatedPnlQtrRoute = AuthenticatedPnlQtrRouteImport.update({
+  id: '/pnl-qtr',
+  path: '/pnl-qtr',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedPnlBonusRoute = AuthenticatedPnlBonusRouteImport.update({
+  id: '/pnl-bonus',
+  path: '/pnl-bonus',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedPnlRoute = AuthenticatedPnlRouteImport.update({
+  id: '/pnl',
+  path: '/pnl',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedPermissionsRoute =
+  AuthenticatedPermissionsRouteImport.update({
+    id: '/permissions',
+    path: '/permissions',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedLocationsRoute = AuthenticatedLocationsRouteImport.update({
+  id: '/locations',
+  path: '/locations',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedDessertsRoute = AuthenticatedDessertsRouteImport.update({
+  id: '/desserts',
+  path: '/desserts',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRouteWithChildren
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/desserts': typeof AuthenticatedDessertsRoute
+  '/locations': typeof AuthenticatedLocationsRoute
+  '/permissions': typeof AuthenticatedPermissionsRoute
+  '/pnl': typeof AuthenticatedPnlRoute
+  '/pnl-bonus': typeof AuthenticatedPnlBonusRoute
+  '/pnl-qtr': typeof AuthenticatedPnlQtrRoute
+  '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/auth': typeof AuthRouteWithChildren
+  '/dashboard': typeof AuthenticatedDashboardRoute
+  '/desserts': typeof AuthenticatedDessertsRoute
+  '/locations': typeof AuthenticatedLocationsRoute
+  '/permissions': typeof AuthenticatedPermissionsRoute
+  '/pnl': typeof AuthenticatedPnlRoute
+  '/pnl-bonus': typeof AuthenticatedPnlBonusRoute
+  '/pnl-qtr': typeof AuthenticatedPnlQtrRoute
+  '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/_authenticated': typeof AuthenticatedRouteWithChildren
+  '/auth': typeof AuthRouteWithChildren
+  '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/_authenticated/desserts': typeof AuthenticatedDessertsRoute
+  '/_authenticated/locations': typeof AuthenticatedLocationsRoute
+  '/_authenticated/permissions': typeof AuthenticatedPermissionsRoute
+  '/_authenticated/pnl': typeof AuthenticatedPnlRoute
+  '/_authenticated/pnl-bonus': typeof AuthenticatedPnlBonusRoute
+  '/_authenticated/pnl-qtr': typeof AuthenticatedPnlQtrRoute
+  '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/dashboard'
+    | '/desserts'
+    | '/locations'
+    | '/permissions'
+    | '/pnl'
+    | '/pnl-bonus'
+    | '/pnl-qtr'
+    | '/auth/callback'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/auth'
+    | '/dashboard'
+    | '/desserts'
+    | '/locations'
+    | '/permissions'
+    | '/pnl'
+    | '/pnl-bonus'
+    | '/pnl-qtr'
+    | '/auth/callback'
+  id:
+    | '__root__'
+    | '/'
+    | '/_authenticated'
+    | '/auth'
+    | '/_authenticated/dashboard'
+    | '/_authenticated/desserts'
+    | '/_authenticated/locations'
+    | '/_authenticated/permissions'
+    | '/_authenticated/pnl'
+    | '/_authenticated/pnl-bonus'
+    | '/_authenticated/pnl-qtr'
+    | '/auth/callback'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
+  AuthRoute: typeof AuthRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/_authenticated': {
+      id: '/_authenticated'
+      path: ''
+      fullPath: '/'
+      preLoaderRoute: typeof AuthenticatedRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -48,12 +184,114 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/auth/callback': {
+      id: '/auth/callback'
+      path: '/callback'
+      fullPath: '/auth/callback'
+      preLoaderRoute: typeof AuthCallbackRouteImport
+      parentRoute: typeof AuthRoute
+    }
+    '/_authenticated/pnl-qtr': {
+      id: '/_authenticated/pnl-qtr'
+      path: '/pnl-qtr'
+      fullPath: '/pnl-qtr'
+      preLoaderRoute: typeof AuthenticatedPnlQtrRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/pnl-bonus': {
+      id: '/_authenticated/pnl-bonus'
+      path: '/pnl-bonus'
+      fullPath: '/pnl-bonus'
+      preLoaderRoute: typeof AuthenticatedPnlBonusRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/pnl': {
+      id: '/_authenticated/pnl'
+      path: '/pnl'
+      fullPath: '/pnl'
+      preLoaderRoute: typeof AuthenticatedPnlRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/permissions': {
+      id: '/_authenticated/permissions'
+      path: '/permissions'
+      fullPath: '/permissions'
+      preLoaderRoute: typeof AuthenticatedPermissionsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/locations': {
+      id: '/_authenticated/locations'
+      path: '/locations'
+      fullPath: '/locations'
+      preLoaderRoute: typeof AuthenticatedLocationsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/desserts': {
+      id: '/_authenticated/desserts'
+      path: '/desserts'
+      fullPath: '/desserts'
+      preLoaderRoute: typeof AuthenticatedDessertsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/dashboard': {
+      id: '/_authenticated/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof AuthenticatedDashboardRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
   }
 }
 
+interface AuthenticatedRouteChildren {
+  AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
+  AuthenticatedDessertsRoute: typeof AuthenticatedDessertsRoute
+  AuthenticatedLocationsRoute: typeof AuthenticatedLocationsRoute
+  AuthenticatedPermissionsRoute: typeof AuthenticatedPermissionsRoute
+  AuthenticatedPnlRoute: typeof AuthenticatedPnlRoute
+  AuthenticatedPnlBonusRoute: typeof AuthenticatedPnlBonusRoute
+  AuthenticatedPnlQtrRoute: typeof AuthenticatedPnlQtrRoute
+}
+
+const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
+  AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
+  AuthenticatedDessertsRoute: AuthenticatedDessertsRoute,
+  AuthenticatedLocationsRoute: AuthenticatedLocationsRoute,
+  AuthenticatedPermissionsRoute: AuthenticatedPermissionsRoute,
+  AuthenticatedPnlRoute: AuthenticatedPnlRoute,
+  AuthenticatedPnlBonusRoute: AuthenticatedPnlBonusRoute,
+  AuthenticatedPnlQtrRoute: AuthenticatedPnlQtrRoute,
+}
+
+const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
+  AuthenticatedRouteChildren,
+)
+
+interface AuthRouteChildren {
+  AuthCallbackRoute: typeof AuthCallbackRoute
+}
+
+const AuthRouteChildren: AuthRouteChildren = {
+  AuthCallbackRoute: AuthCallbackRoute,
+}
+
+const AuthRouteWithChildren = AuthRoute._addFileChildren(AuthRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AuthenticatedRoute: AuthenticatedRouteWithChildren,
+  AuthRoute: AuthRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
