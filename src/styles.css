@@ -143,70 +143,49 @@
   }
 }
 
+/* Report table styling (screen + print) — matches Daily Sales Activity layout */
+.report-table { border-collapse: collapse; width: 100%; }
+.report-thead { background-color: #0a2a5e; color: #ffffff; }
+.report-thead th { color: #ffffff !important; }
+.report-row-odd { background-color: #ffffff; }
+.report-row-even { background-color: #eaf2fb; }
+.report-totals { background-color: #0a1f4a; color: #ffffff; }
+.report-totals td { color: #ffffff !important; }
+
 /* Print: landscape, hide sidebar, fit to single page, laser-printer friendly */
 @page {
   size: letter landscape;
-  margin: 0.15in;
+  margin: 0.3in;
 }
 
 @media print {
   html, body {
     background: #ffffff !important;
     color: #000000 !important;
-    width: 11in !important;
-    height: 8.5in !important;
     margin: 0 !important;
-    overflow: hidden !important;
   }
   aside, [data-print-hide] {
     display: none !important;
-  }
-  main {
-    position: relative !important;
-    overflow: visible !important;
-    padding: 0 !important;
-    height: 8.2in !important;
-    width: 10.7in !important;
   }
   /* Force colors to print */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  /* Zebra striping kept */
-  .print-zebra-odd { background-color: #ffffff !important; }
-  .print-zebra-even { background-color: #eaf2fb !important; }
+  /* Hide filter selectors and action buttons when printing */
+  [data-print-filters], [data-print-actions], [data-print-add-row] { display: none !important; }
+  .print-fit button { display: none !important; }
 
   /* Shrink everything to fit a single landscape page */
   .print-fit {
-    position: absolute !important;
-    top: 0.36in !important;
-    left: 0 !important;
-    transform: scale(0.62);
+    transform: scale(0.72);
     transform-origin: top left;
-    width: 161.29% !important;
-    max-height: none !important;
-    page-break-after: avoid !important;
-    page-break-before: avoid !important;
-    page-break-inside: avoid !important;
-    break-inside: avoid !important;
+    width: 138.88% !important;
   }
-  .print-fit h1 { font-size: 1.1rem !important; }
-  .print-fit h2 { font-size: 0.95rem !important; }
-  .print-fit .text-3xl { font-size: 1.1rem !important; }
-  .print-fit p, .print-fit span, .print-fit td, .print-fit th, .print-fit div {
-    line-height: 1.12 !important;
-  }
-  /* Hide filter selectors when printing — header bar shows context */
-  [data-print-filters], [data-print-actions], [data-print-add-row] { display: none !important; }
+  .print-fit .text-3xl { font-size: 1.25rem !important; }
+  .print-report-card { border: 1px solid #0a2a5e !important; box-shadow: none !important; }
 
-  .print-compact-card { border: 1px solid #333333 !important; box-shadow: none !important; }
-  .print-fit button { display: none !important; }
-  .print-row { min-height: 0 !important; padding-top: 0.22rem !important; padding-bottom: 0.22rem !important; }
-  .print-section { padding-top: 0.32rem !important; padding-bottom: 0.32rem !important; }
-  .print-total { padding-top: 0.32rem !important; padding-bottom: 0.32rem !important; }
-  input { height: 1.45rem !important; padding-top: 0 !important; padding-bottom: 0 !important; }
-
-  /* Prevent forced page breaks */
+  /* Prevent page breaks splitting the report */
+  .print-fit, .print-report-card, table, thead, tbody, tr { page-break-inside: avoid !important; break-inside: avoid !important; }
   * { page-break-before: avoid !important; page-break-after: avoid !important; }
 }
