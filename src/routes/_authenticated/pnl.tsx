@@ -360,14 +360,15 @@ function WeeklyPnlPage() {
         </div>
 
         <div className="divide-y">
-          <Row label="Food Sales (from daily sales)">
+          <Row label="Food Sales (from daily sales)" i={0}>
             <ReadonlyAmount value={foodSales} />
             <PctCell>—</PctCell>
           </Row>
-          <Row label="Catering">
+          <Row label="Catering" i={1}>
             <AmountInput value={catering} onChange={setCatering} />
             <PctCell>{pctFmt(pctOf(cateringN))}</PctCell>
           </Row>
+
           <TotalRow label="Total Sales" value={money(totalSales)} />
 
           <SectionHeader label="Payroll" />
