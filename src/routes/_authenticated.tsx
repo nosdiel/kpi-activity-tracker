@@ -100,7 +100,7 @@ function AuthenticatedLayout() {
           </Button>
         </div>
       </aside>
-      <main className="flex-1 overflow-x-auto p-6 md:p-10">
+      <main className="flex-1 overflow-y-auto p-6 md:p-10">
         <Outlet />
       </main>
     </div>
