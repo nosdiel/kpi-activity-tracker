@@ -268,9 +268,15 @@ function DashboardPage() {
             <Select value={week?.toString() ?? ""} onValueChange={(v) => setWeek(Number(v))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Array.from({ length: periodRange.end - periodRange.start + 1 }, (_, i) => periodRange.start + i).map((w) => (
-                  <SelectItem key={w} value={String(w)}>Week {w}</SelectItem>
-                ))}
+                {Array.from({ length: periodRange.end - periodRange.start + 1 }, (_, i) => periodRange.start + i).map((w) => {
+                  const wd = fyRow ? weekDates(fyRow.start_date, w) : [];
+                  const fmt = (iso: string) => {
+                    const d = new Date(`${iso}T00:00:00Z`);
+                    return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+                  };
+                  const range = wd.length === 7 ? ` (${fmt(wd[0])}–${fmt(wd[6])})` : "";
+                  return <SelectItem key={w} value={String(w)}>Week {w}{range}</SelectItem>;
+                })}
               </SelectContent>
             </Select>
           </Field>
