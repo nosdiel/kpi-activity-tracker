@@ -163,6 +163,9 @@
     background: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
+    width: 11in !important;
+    height: 8.5in !important;
+    overflow: hidden !important;
   }
   aside, [data-print-hide] {
     display: none !important;
@@ -178,16 +181,21 @@
 
   /* Shrink everything to fit a single landscape page */
   .print-fit {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
     transform: scale(0.62);
     transform-origin: top left;
     width: 161.29% !important;
-    height: 1370px !important;
+    height: auto !important;
     overflow: hidden !important;
   }
   .print-fit .text-3xl { font-size: 1.25rem !important; }
   .print-report-card { border: 1px solid #0a2a5e !important; box-shadow: none !important; }
 
   .print-fit > div { gap: 0.12in !important; }
+  .report-table th { padding: 0.055in 0.07in !important; font-size: 0.45rem !important; line-height: 1 !important; }
+  .report-table td { padding: 0.055in 0.07in !important; font-size: 0.55rem !important; line-height: 1.05 !important; }
+  .report-table td .text-xs { font-size: 0.43rem !important; line-height: 1 !important; }
   .report-stat-grid {
     display: grid !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
