@@ -6,10 +6,11 @@ let _admin: SupabaseClient<Database> | null = null;
 export function getSupabaseAdmin(): SupabaseClient<Database> {
   if (_admin) return _admin;
   const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key =
+    process.env.EXTERNAL_SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) {
     throw new Error(
-      "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Add SUPABASE_SERVICE_ROLE_KEY as a server secret."
+      "Missing SUPABASE_URL or EXTERNAL_SUPABASE_SERVICE_ROLE_KEY. Add EXTERNAL_SUPABASE_SERVICE_ROLE_KEY as a server secret."
     );
   }
   _admin = createClient<Database>(url, key, {
