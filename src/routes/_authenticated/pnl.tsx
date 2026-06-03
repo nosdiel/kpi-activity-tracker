@@ -429,10 +429,11 @@ function WeeklyPnlPage() {
           />
           <TotalRow label="Total (3%)" value={money(paperTotal)} pct={pctFmt(pctOf(paperTotal))} />
 
-          <Row label="Total Repairs 1%">
+          <Row label="Total Repairs 1%" i={0}>
             <AmountInput value={repairs} onChange={setRepairs} />
             <PctCell>{pctFmt(pctOf(repairsN))}</PctCell>
           </Row>
+
 
           <div className="bg-foreground text-background px-6 py-4 flex items-center justify-between">
             <span className="font-semibold">Total Cost of Goods</span>
