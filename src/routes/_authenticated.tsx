@@ -33,9 +33,10 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const settingsPaths = ["/settings", "/desserts", "/square", "/toast", "/users", "/permissions", "/locations"];
   const currentLabel =
     NAV.find((n) => pathname.startsWith(n.to))?.label ??
-    (pathname.startsWith("/settings") ? "Settings" : "KPI");
+    (settingsPaths.some((p) => pathname.startsWith(p)) ? "Settings" : "KPI");
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate({ to: "/auth" });
