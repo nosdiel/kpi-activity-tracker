@@ -5,7 +5,6 @@ import {
   LayoutDashboard,
   FileBarChart,
   Calculator,
-  Target,
   PhoneCall,
   Settings,
   LogOut,
@@ -13,7 +12,6 @@ import {
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/targets", label: "Targets", icon: Target },
   { to: "/pnl", label: "P&L", icon: FileBarChart },
   { to: "/pnl-bonus", label: "Bonus Calculator", icon: Calculator },
   { to: "/who-to-call", label: "Who to Call", icon: PhoneCall },
@@ -32,7 +30,7 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const settingsPaths = ["/settings", "/desserts", "/square", "/toast", "/users", "/permissions", "/locations"];
+  const settingsPaths = ["/settings", "/desserts", "/square", "/toast", "/users", "/permissions", "/locations", "/targets"];
   const currentLabel =
     NAV.find((n) => pathname.startsWith(n.to))?.label ??
     (settingsPaths.some((p) => pathname.startsWith(p)) ? "Settings" : "KPI");
