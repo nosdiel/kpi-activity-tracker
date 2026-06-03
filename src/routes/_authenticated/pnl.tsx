@@ -473,7 +473,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode; i?
 
 function TotalRow({ label, value, pct }: { label: string; value: string; pct?: string }) {
   return (
-    <div className="px-6 py-3 bg-muted/50 flex items-center justify-between font-semibold print-total">
+    <div className="px-6 py-3 bg-[#cfdcef] flex items-center justify-between font-semibold print-total">
       <span>{label}</span>
       <div className="flex items-center gap-6">
         <span className="tabular-nums">{value}</span>
