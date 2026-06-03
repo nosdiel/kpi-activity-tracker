@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { IceCream, ArrowDownToLine, Utensils, Users, Shield, MapPin, Target } from "lucide-react";
+import { IceCream, ArrowDownToLine, Utensils, Users, Shield, MapPin, Target, Globe } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -21,6 +21,7 @@ const groups = [
       { to: "/users", label: "Users", icon: Users, description: "Invite team members and manage accounts." },
       { to: "/permissions", label: "Permissions", icon: Shield, description: "Assign roles and access levels." },
       { to: "/locations", label: "Locations", icon: MapPin, description: "Add, edit, and activate store locations." },
+      { to: "/regions", label: "Regions", icon: Globe, description: "Define the regions you can assign to locations." },
     ],
   },
   {
