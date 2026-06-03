@@ -1,29 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { GenericTable } from "@/components/GenericTable";
 
 export const Route = createFileRoute("/_authenticated/pnl")({
-  head: () => ({ meta: [{ title: "Pnl — NiNi KPI" }] }),
-  component: pnlPage,
+  head: () => ({ meta: [{ title: "P&L Weekly — NiNi KPI" }] }),
+  component: () => (
+    <GenericTable
+      table="weekly_pnl"
+      title="P&L — Weekly"
+      description="Weekly profit & loss per location."
+      template={{
+        location_id: "<uuid>",
+        week_start_date: new Date().toISOString().slice(0, 10),
+        revenue: 0,
+        cogs: 0,
+        labor: 0,
+        operating_expenses: 0,
+      }}
+      orderBy="week_start_date"
+    />
+  ),
 });
-
-function pnlPage() {
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">NiNi - KPI</p>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Pnl</h1>
-      </div>
-      <Card>
-        <CardHeader>
-          <CardTitle>Pnl</CardTitle>
-          <CardDescription>Stub page — wire up server functions next.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground">
-            Read/write through <code>createServerFn</code> handlers using <code>requireSupabaseAuth</code>.
-          </p>
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
