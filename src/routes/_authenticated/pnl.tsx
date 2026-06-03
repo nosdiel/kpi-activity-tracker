@@ -287,7 +287,7 @@ function WeeklyPnlPage() {
             {locName} · FY{fy ?? "—"} · Period {period} · Week {week ?? "—"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2" data-print-actions>
           <Button variant="outline" size="sm" disabled>Weekly PNL</Button>
           <Button variant="outline" size="sm" asChild>
             <Link to="/pnl-qtr">QTR Report</Link>
@@ -348,7 +348,7 @@ function WeeklyPnlPage() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden print-compact-card">
         <div className="bg-primary text-primary-foreground px-6 py-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold italic">Week {week ?? "—"}</h2>
