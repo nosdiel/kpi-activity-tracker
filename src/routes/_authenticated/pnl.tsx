@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { RefreshCw, Save, Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
@@ -24,8 +24,11 @@ export const Route = createFileRoute("/_authenticated/pnl")({
 
 type Location = { id: string; name: string };
 type FY = { fiscal_year: number; start_date: string };
-type Vendor = { id: string; name: string; section: string; sort_order: number | null; location_id: string | null; active: boolean };
-type VendorAmount = { vendor_id: string; amount: number };
+type VendorLine = { name: string; amount: number };
+type VendorAmountsBlob = {
+  food_cost?: VendorLine[];
+  paper_supplies?: VendorLine[];
+};
 type WeeklyPnlRow = {
   id?: string;
   location_id: string;
@@ -34,6 +37,8 @@ type WeeklyPnlRow = {
   catering: number | null;
   wages: number | null;
   repairs: number | null;
+  beer_wine_cost: number | null;
+  vendor_amounts: VendorAmountsBlob | null;
 };
 
 const DEFAULT_FOOD_VENDORS: readonly string[] = [
@@ -44,25 +49,52 @@ const DEFAULT_PAPER_VENDORS: readonly string[] = ["All Florida Paper", "Dade Pap
 
 const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const pct = (n: number) => `${(n * 100).toFixed(2)}%`;
+const pctFmt = (n: number) => `${(n * 100).toFixed(2)}%`;
 const parseNum = (s: string) => {
   const n = parseFloat(s.replace(/[^0-9.\-]/g, ""));
   return Number.isFinite(n) ? n : 0;
 };
 
+// Merge stored vendor list with defaults so defaults always appear (unless explicitly removed).
+function buildSectionLines(
+  defaults: readonly string[],
+  stored: VendorLine[] | undefined,
+  removed: readonly string[],
+): VendorLine[] {
+  const removedSet = new Set(removed.map((n) => n.toLowerCase()));
+  const storedMap = new Map((stored ?? []).map((v) => [v.name.toLowerCase(), v]));
+  const out: VendorLine[] = [];
+  const seen = new Set<string>();
+  for (const name of defaults) {
+    const key = name.toLowerCase();
+    if (removedSet.has(key)) continue;
+    seen.add(key);
+    out.push({ name, amount: storedMap.get(key)?.amount ?? 0 });
+  }
+  for (const v of stored ?? []) {
+    const key = v.name.toLowerCase();
+    if (seen.has(key) || removedSet.has(key)) continue;
+    out.push({ name: v.name, amount: v.amount });
+  }
+  return out;
+}
+
 function WeeklyPnlPage() {
-  const qc = useQueryClient();
   const [locationId, setLocationId] = useState<string>("");
   const [fy, setFy] = useState<number | null>(null);
   const [week, setWeek] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
 
-  // Local editable state
+  // Editable state
   const [catering, setCatering] = useState("");
   const [wages, setWages] = useState("");
   const [repairs, setRepairs] = useState("");
-  const [amounts, setAmounts] = useState<Record<string, string>>({}); // vendor_id -> string
-  const [hiddenVendors, setHiddenVendors] = useState<Set<string>>(new Set());
+  const [foodLines, setFoodLines] = useState<VendorLine[]>(
+    () => DEFAULT_FOOD_VENDORS.map((n) => ({ name: n, amount: 0 })),
+  );
+  const [paperLines, setPaperLines] = useState<VendorLine[]>(
+    () => DEFAULT_PAPER_VENDORS.map((n) => ({ name: n, amount: 0 })),
+  );
   const [newFoodVendor, setNewFoodVendor] = useState("");
   const [newPaperVendor, setNewPaperVendor] = useState("");
 
@@ -107,62 +139,14 @@ function WeeklyPnlPage() {
   const periodRange = periodWeekRange(period);
   const dates = useMemo(() => (fyRow && week ? weekDates(fyRow.start_date, week) : []), [fyRow, week]);
 
-  // Vendors visible for this location (global + per-location)
-  const vendorsQ = useQuery({
-    queryKey: ["pnl-vendors", locationId],
-    enabled: !!locationId,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("pnl_vendors")
-        .select("id,name,section,sort_order,location_id,active")
-        .eq("active", true)
-        .or(`location_id.is.null,location_id.eq.${locationId}`)
-        .order("section")
-        .order("sort_order", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as Vendor[];
-    },
-  });
-
-  // Auto-seed default vendors for a location the first time it's used.
-  useEffect(() => {
-    if (!locationId || !vendorsQ.data) return;
-    const haveFood = vendorsQ.data.some((v) => v.section === "food_cost");
-    const havePaper = vendorsQ.data.some((v) => v.section === "paper_supplies");
-    const toInsert: Array<{ name: string; section: string; sort_order: number; active: boolean; location_id: string }> = [];
-    if (!haveFood) DEFAULT_FOOD_VENDORS.forEach((n, i) => toInsert.push({ name: n, section: "food_cost", sort_order: (i + 1) * 10, active: true, location_id: locationId }));
-    if (!havePaper) DEFAULT_PAPER_VENDORS.forEach((n, i) => toInsert.push({ name: n, section: "paper_supplies", sort_order: (i + 1) * 10, active: true, location_id: locationId }));
-    if (toInsert.length === 0) return;
-    (async () => {
-      const { error } = await supabase.from("pnl_vendors").insert(toInsert);
-      if (!error) qc.invalidateQueries({ queryKey: ["pnl-vendors", locationId] });
-    })();
-  }, [locationId, vendorsQ.data, qc]);
-
-  // Vendor amounts for this week
-  const amountsQ = useQuery({
-    queryKey: ["pnl-vendor-amounts", locationId, fy, week],
-    enabled: !!locationId && !!fy && !!week,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("weekly_pnl_vendor_amounts")
-        .select("vendor_id,amount")
-        .eq("location_id", locationId)
-        .eq("fiscal_year", fy as number)
-        .eq("fiscal_week", week as number);
-      if (error) throw error;
-      return (data ?? []) as VendorAmount[];
-    },
-  });
-
-  // Weekly PNL header row
+  // Weekly PNL row
   const pnlQ = useQuery({
     queryKey: ["weekly-pnl-row", locationId, fy, week],
     enabled: !!locationId && !!fy && !!week,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("weekly_pnl")
-        .select("id,location_id,fiscal_year,fiscal_week,catering,wages,repairs")
+        .select("id,location_id,fiscal_year,fiscal_week,catering,wages,repairs,beer_wine_cost,vendor_amounts")
         .eq("location_id", locationId)
         .eq("fiscal_year", fy as number)
         .eq("fiscal_week", week as number)
@@ -188,21 +172,25 @@ function WeeklyPnlPage() {
     },
   });
 
-  // Seed local editable state when queries arrive / week changes
+  // Hydrate local state when row arrives or selection changes
   useEffect(() => {
-    setCatering(pnlQ.data?.catering != null ? String(pnlQ.data.catering) : "");
-    setWages(pnlQ.data?.wages != null ? String(pnlQ.data.wages) : "");
-    setRepairs(pnlQ.data?.repairs != null ? String(pnlQ.data.repairs) : "");
+    const row = pnlQ.data;
+    setCatering(row?.catering != null ? String(row.catering) : "");
+    setWages(row?.wages != null ? String(row.wages) : "");
+    setRepairs(row?.repairs != null ? String(row.repairs) : "");
+
+    let blob: VendorAmountsBlob = {};
+    const raw = row?.vendor_amounts as unknown;
+    if (raw && typeof raw === "object") blob = raw as VendorAmountsBlob;
+    else if (typeof raw === "string") {
+      try { blob = JSON.parse(raw) as VendorAmountsBlob; } catch { blob = {}; }
+    }
+    const removedFood = (blob as { _removed_food?: string[] })._removed_food ?? [];
+    const removedPaper = (blob as { _removed_paper?: string[] })._removed_paper ?? [];
+    setFoodLines(buildSectionLines(DEFAULT_FOOD_VENDORS, blob.food_cost, removedFood));
+    setPaperLines(buildSectionLines(DEFAULT_PAPER_VENDORS, blob.paper_supplies, removedPaper));
   }, [pnlQ.data, locationId, fy, week]);
 
-  useEffect(() => {
-    const m: Record<string, string> = {};
-    (amountsQ.data ?? []).forEach((a) => { m[a.vendor_id] = String(a.amount); });
-    setAmounts(m);
-    setHiddenVendors(new Set());
-  }, [amountsQ.data, locationId, fy, week]);
-
-  // Derived totals
   const foodSales = useMemo(
     () => (salesQ.data ?? []).reduce((s, r) => s + Number(r.actual_sales ?? 0), 0),
     [salesQ.data],
@@ -211,99 +199,76 @@ function WeeklyPnlPage() {
   const wagesN = parseNum(wages);
   const repairsN = parseNum(repairs);
   const totalSales = foodSales + cateringN;
-
-  const visibleVendors = useMemo(
-    () => (vendorsQ.data ?? []).filter((v) => !hiddenVendors.has(v.id)),
-    [vendorsQ.data, hiddenVendors],
-  );
-  const foodVendors = visibleVendors.filter((v) => v.section === "food_cost");
-  const paperVendors = visibleVendors.filter((v) => v.section === "paper_supplies");
-
-  const sectionTotal = (vs: Vendor[]) => vs.reduce((s, v) => s + parseNum(amounts[v.id] ?? ""), 0);
-  const foodCostTotal = sectionTotal(foodVendors);
-  const paperTotal = sectionTotal(paperVendors);
+  const foodCostTotal = foodLines.reduce((s, v) => s + (v.amount || 0), 0);
+  const paperTotal = paperLines.reduce((s, v) => s + (v.amount || 0), 0);
   const totalCogs = wagesN + foodCostTotal + paperTotal + repairsN;
 
   const pctOf = (n: number) => (totalSales > 0 ? n / totalSales : 0);
 
+  const locName = locationsQ.data?.find((l) => l.id === locationId)?.name ?? "—";
   const fmtMD = (iso: string) => {
     if (!iso) return "";
     const d = new Date(`${iso}T00:00:00Z`);
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`;
   };
 
-  const locName = locationsQ.data?.find((l) => l.id === locationId)?.name ?? "—";
+  const updateLine = (
+    setter: React.Dispatch<React.SetStateAction<VendorLine[]>>,
+    idx: number,
+    amount: number,
+  ) => setter((prev) => prev.map((v, i) => (i === idx ? { ...v, amount } : v)));
 
-  const handleRefresh = () => {
-    pnlQ.refetch(); amountsQ.refetch(); salesQ.refetch(); vendorsQ.refetch();
-  };
+  const removeLine = (
+    setter: React.Dispatch<React.SetStateAction<VendorLine[]>>,
+    idx: number,
+  ) => setter((prev) => prev.filter((_, i) => i !== idx));
 
-  const handleAddVendor = async (section: "food_cost" | "paper_supplies", name: string) => {
+  const addVendor = (
+    setter: React.Dispatch<React.SetStateAction<VendorLine[]>>,
+    name: string,
+    clear: () => void,
+  ) => {
     const trimmed = name.trim();
-    if (!trimmed || !locationId) return;
-    // If a hidden one matches, just unhide
-    const existing = (vendorsQ.data ?? []).find(
-      (v) => v.section === section && v.name.toLowerCase() === trimmed.toLowerCase(),
+    if (!trimmed) return;
+    setter((prev) =>
+      prev.some((v) => v.name.toLowerCase() === trimmed.toLowerCase())
+        ? prev
+        : [...prev, { name: trimmed, amount: 0 }],
     );
-    if (existing) {
-      setHiddenVendors((s) => { const n = new Set(s); n.delete(existing.id); return n; });
-    } else {
-      const maxSort = Math.max(0, ...(vendorsQ.data ?? []).filter((v) => v.section === section).map((v) => v.sort_order ?? 0));
-      const { error } = await supabase.from("pnl_vendors").insert({
-        name: trimmed,
-        section,
-        sort_order: maxSort + 10,
-        active: true,
-        location_id: locationId,
-      });
-      if (error) { toast.error(error.message); return; }
-      await qc.invalidateQueries({ queryKey: ["pnl-vendors", locationId] });
-    }
-    if (section === "food_cost") setNewFoodVendor(""); else setNewPaperVendor("");
+    clear();
   };
+
+  const handleRefresh = () => { pnlQ.refetch(); salesQ.refetch(); };
 
   const handleSave = async () => {
     if (!locationId || !fy || !week) return;
     setSaving(true);
     try {
-      // Upsert weekly_pnl row
-      const pnlPayload = {
-        location_id: locationId,
-        fiscal_year: fy,
-        fiscal_week: week,
-        catering: cateringN,
-        wages: wagesN,
-        repairs: repairsN,
-      };
-      const { error: pnlErr } = await supabase
-        .from("weekly_pnl")
-        .upsert(pnlPayload, { onConflict: "location_id,fiscal_year,fiscal_week" });
-      if (pnlErr) throw pnlErr;
+      // Track removed defaults so they stay removed
+      const visibleFood = new Set(foodLines.map((v) => v.name.toLowerCase()));
+      const visiblePaper = new Set(paperLines.map((v) => v.name.toLowerCase()));
+      const removedFood = DEFAULT_FOOD_VENDORS.filter((n) => !visibleFood.has(n.toLowerCase()));
+      const removedPaper = DEFAULT_PAPER_VENDORS.filter((n) => !visiblePaper.has(n.toLowerCase()));
 
-      // Upsert vendor amounts for visible vendors; delete amounts for hidden ones
-      const upserts = visibleVendors.map((v) => ({
-        location_id: locationId,
-        fiscal_year: fy,
-        fiscal_week: week,
-        vendor_id: v.id,
-        amount: parseNum(amounts[v.id] ?? ""),
-      }));
-      if (upserts.length) {
-        const { error } = await supabase
-          .from("weekly_pnl_vendor_amounts")
-          .upsert(upserts, { onConflict: "location_id,fiscal_year,fiscal_week,vendor_id" });
-        if (error) throw error;
-      }
-      if (hiddenVendors.size) {
-        const { error } = await supabase
-          .from("weekly_pnl_vendor_amounts")
-          .delete()
-          .eq("location_id", locationId)
-          .eq("fiscal_year", fy)
-          .eq("fiscal_week", week)
-          .in("vendor_id", [...hiddenVendors]);
-        if (error) throw error;
-      }
+      const vendor_amounts: VendorAmountsBlob & { _removed_food?: string[]; _removed_paper?: string[] } = {
+        food_cost: foodLines,
+        paper_supplies: paperLines,
+        _removed_food: removedFood,
+        _removed_paper: removedPaper,
+      };
+
+      const { error } = await supabase
+        .from("weekly_pnl")
+        .upsert({
+          location_id: locationId,
+          fiscal_year: fy,
+          fiscal_week: week,
+          catering: cateringN,
+          wages: wagesN,
+          repairs: repairsN,
+          vendor_amounts,
+        }, { onConflict: "location_id,fiscal_year,fiscal_week" });
+      if (error) throw error;
       toast.success("Saved");
       handleRefresh();
     } catch (e) {
@@ -395,35 +360,35 @@ function WeeklyPnlPage() {
         </div>
 
         <div className="divide-y">
-          {/* Sales */}
           <Row label="Food Sales (from daily sales)">
             <ReadonlyAmount value={foodSales} />
             <PctCell>—</PctCell>
           </Row>
           <Row label="Catering">
             <AmountInput value={catering} onChange={setCatering} />
-            <PctCell>{pct(pctOf(cateringN))}</PctCell>
+            <PctCell>{pctFmt(pctOf(cateringN))}</PctCell>
           </Row>
           <TotalRow label="Total Sales" value={money(totalSales)} />
 
-          {/* Payroll */}
           <SectionHeader label="Payroll" />
           <Row label="Wages">
             <AmountInput value={wages} onChange={setWages} />
-            <PctCell>{pct(pctOf(wagesN))}</PctCell>
+            <PctCell>{pctFmt(pctOf(wagesN))}</PctCell>
           </Row>
-          <TotalRow label="Total Payroll 20%" value={money(wagesN)} pct={pct(pctOf(wagesN))} />
+          <TotalRow label="Total Payroll 20%" value={money(wagesN)} pct={pctFmt(pctOf(wagesN))} />
 
-          {/* Food Cost */}
           <SectionHeader label="Food Cost" />
-          {foodVendors.map((v) => (
-            <Row key={v.id} label={v.name}>
-              <AmountInput value={amounts[v.id] ?? ""} onChange={(s) => setAmounts((a) => ({ ...a, [v.id]: s }))} />
-              <PctCell>{pct(pctOf(parseNum(amounts[v.id] ?? "")))}</PctCell>
+          {foodLines.map((v, i) => (
+            <Row key={`${v.name}-${i}`} label={v.name}>
+              <AmountInput
+                value={v.amount ? String(v.amount) : ""}
+                onChange={(s) => updateLine(setFoodLines, i, parseNum(s))}
+              />
+              <PctCell>{pctFmt(pctOf(v.amount || 0))}</PctCell>
               <button
                 aria-label={`Remove ${v.name}`}
                 className="ml-2 text-muted-foreground hover:text-destructive"
-                onClick={() => setHiddenVendors((s) => new Set(s).add(v.id))}
+                onClick={() => removeLine(setFoodLines, i)}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -432,20 +397,22 @@ function WeeklyPnlPage() {
           <AddVendorRow
             value={newFoodVendor}
             onChange={setNewFoodVendor}
-            onAdd={() => handleAddVendor("food_cost", newFoodVendor)}
+            onAdd={() => addVendor(setFoodLines, newFoodVendor, () => setNewFoodVendor(""))}
           />
-          <TotalRow label="Food Cost - Goal 33%" value={money(foodCostTotal)} pct={pct(pctOf(foodCostTotal))} />
+          <TotalRow label="Food Cost - Goal 33%" value={money(foodCostTotal)} pct={pctFmt(pctOf(foodCostTotal))} />
 
-          {/* Paper Supplies */}
           <SectionHeader label="Paper Supplies" />
-          {paperVendors.map((v) => (
-            <Row key={v.id} label={v.name}>
-              <AmountInput value={amounts[v.id] ?? ""} onChange={(s) => setAmounts((a) => ({ ...a, [v.id]: s }))} />
-              <PctCell>{pct(pctOf(parseNum(amounts[v.id] ?? "")))}</PctCell>
+          {paperLines.map((v, i) => (
+            <Row key={`${v.name}-${i}`} label={v.name}>
+              <AmountInput
+                value={v.amount ? String(v.amount) : ""}
+                onChange={(s) => updateLine(setPaperLines, i, parseNum(s))}
+              />
+              <PctCell>{pctFmt(pctOf(v.amount || 0))}</PctCell>
               <button
                 aria-label={`Remove ${v.name}`}
                 className="ml-2 text-muted-foreground hover:text-destructive"
-                onClick={() => setHiddenVendors((s) => new Set(s).add(v.id))}
+                onClick={() => removeLine(setPaperLines, i)}
               >
                 <X className="h-4 w-4" />
               </button>
@@ -454,22 +421,20 @@ function WeeklyPnlPage() {
           <AddVendorRow
             value={newPaperVendor}
             onChange={setNewPaperVendor}
-            onAdd={() => handleAddVendor("paper_supplies", newPaperVendor)}
+            onAdd={() => addVendor(setPaperLines, newPaperVendor, () => setNewPaperVendor(""))}
           />
-          <TotalRow label="Total (3%)" value={money(paperTotal)} pct={pct(pctOf(paperTotal))} />
+          <TotalRow label="Total (3%)" value={money(paperTotal)} pct={pctFmt(pctOf(paperTotal))} />
 
-          {/* Repairs */}
           <Row label="Total Repairs 1%">
             <AmountInput value={repairs} onChange={setRepairs} />
-            <PctCell>{pct(pctOf(repairsN))}</PctCell>
+            <PctCell>{pctFmt(pctOf(repairsN))}</PctCell>
           </Row>
 
-          {/* Total */}
           <div className="bg-foreground text-background px-6 py-4 flex items-center justify-between">
             <span className="font-semibold">Total Cost of Goods</span>
             <div className="flex items-center gap-6">
               <span className="font-semibold tabular-nums">{money(totalCogs)}</span>
-              <span className="text-sm tabular-nums w-16 text-right">{pct(pctOf(totalCogs))}</span>
+              <span className="text-sm tabular-nums w-16 text-right">{pctFmt(pctOf(totalCogs))}</span>
             </div>
           </div>
         </div>
@@ -500,13 +465,13 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function TotalRow({ label, value, pct: pctStr }: { label: string; value: string; pct?: string }) {
+function TotalRow({ label, value, pct }: { label: string; value: string; pct?: string }) {
   return (
     <div className="px-6 py-3 bg-muted/50 flex items-center justify-between font-semibold">
       <span>{label}</span>
       <div className="flex items-center gap-6">
         <span className="tabular-nums">{value}</span>
-        <span className="text-sm tabular-nums w-16 text-right">{pctStr ?? ""}</span>
+        <span className="text-sm tabular-nums w-16 text-right">{pct ?? ""}</span>
       </div>
     </div>
   );
