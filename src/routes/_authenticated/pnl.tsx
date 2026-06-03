@@ -456,14 +456,16 @@ function SectionHeader({ label }: { label: string }) {
   return <div className="px-6 py-3 font-semibold text-foreground bg-muted/30">{label}</div>;
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, children, i = 0 }: { label: string; children: React.ReactNode; i?: number }) {
+  const stripe = i % 2 === 0 ? "bg-white print-zebra-odd" : "bg-[#eaf2fb] print-zebra-even";
   return (
-    <div className="px-6 py-2.5 flex items-center justify-between gap-4">
+    <div className={`px-6 py-2.5 flex items-center justify-between gap-4 ${stripe}`}>
       <span className="text-sm text-foreground">{label}</span>
       <div className="flex items-center gap-3">{children}</div>
     </div>
   );
 }
+
 
 function TotalRow({ label, value, pct }: { label: string; value: string; pct?: string }) {
   return (
