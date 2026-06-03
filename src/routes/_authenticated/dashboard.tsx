@@ -342,7 +342,7 @@ function DashboardPage() {
         </div>
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3 report-stat-grid">
         <Stat label="Sales Target" value={money(totals.target)} variance={totals.varSales} varianceLabel={money(totals.varSales)} pct={totals.target > 0 ? totals.varSales / totals.target : 0} />
         <Stat label="LY Avg" value={money(lyAvgTotal)} variance={avgVariance} varianceLabel={money(avgVariance)} pct={lyAvgTotal > 0 ? avgVariance / lyAvgTotal : 0} />
         <Stat label="LY Cust" value={num(totals.lyCust)} variance={totals.varCust} varianceLabel={num(totals.varCust)} pct={totals.lyCust > 0 ? totals.varCust / totals.lyCust : 0} />
@@ -378,8 +378,8 @@ function Td({ children, right, className = "" }: { children: React.ReactNode; ri
 function Stat({ label, value, variance, varianceLabel, pct }: { label: string; value: string; variance: number; varianceLabel: string; pct: number }) {
   const positive = variance >= 0;
   return (
-    <Card>
-      <CardContent className="pt-6 flex items-start justify-between gap-4">
+    <Card className="report-stat-card">
+      <CardContent className="pt-6 flex items-start justify-between gap-4 report-stat-content">
         <div>
           <p className="text-xs uppercase tracking-wider text-muted-foreground">{label}</p>
           <p className="text-3xl font-bold mt-1">{value}</p>
