@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, redirect, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, Outlet, redirect, Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
@@ -43,10 +43,15 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthenticatedLayout() {
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const currentLabel =
+    NAV.find((n) => pathname.startsWith(n.to))?.label ??
+    (pathname.startsWith("/settings") ? "Settings" : "KPI");
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate({ to: "/auth" });
   };
+
 
   return (
     <div className="flex h-screen bg-background">
@@ -100,8 +105,16 @@ function AuthenticatedLayout() {
           </Button>
         </div>
       </aside>
-      <main className="flex-1 overflow-y-auto p-6 md:p-10">
-        <Outlet />
+      <main className="flex-1 overflow-y-auto">
+        <div
+          className="hidden print:flex items-center justify-center px-6 py-4 mb-4"
+          style={{ backgroundColor: "#0a2a5e", color: "#ffffff" }}
+        >
+          <h1 className="text-lg font-semibold tracking-wide">{currentLabel}</h1>
+        </div>
+        <div className="p-6 md:p-10 print:p-0">
+          <Outlet />
+        </div>
       </main>
     </div>
   );
