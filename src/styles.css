@@ -201,6 +201,7 @@
   [data-print-filters], [data-print-actions], [data-print-add-row] { display: none !important; }
 
   .print-compact-card { border: 1px solid #333333 !important; box-shadow: none !important; }
+  .print-fit button { display: none !important; }
   .print-row { min-height: 0 !important; padding-top: 0.22rem !important; padding-bottom: 0.22rem !important; }
   .print-section { padding-top: 0.32rem !important; padding-bottom: 0.32rem !important; }
   .print-total { padding-top: 0.32rem !important; padding-bottom: 0.32rem !important; }
