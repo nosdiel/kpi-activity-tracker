@@ -3,15 +3,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard,
-  Cake,
-  MapPin,
-  ShieldCheck,
   FileBarChart,
   Calculator,
-  Square as SquareIcon,
   Target,
-  Utensils,
-  Users,
   PhoneCall,
   Settings,
   LogOut,
@@ -19,15 +13,10 @@ import {
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/desserts", label: "Desserts", icon: Cake },
-  { to: "/locations", label: "Locations", icon: MapPin },
-  { to: "/permissions", label: "Permissions", icon: ShieldCheck },
-  { to: "/pnl", label: "P&L", icon: FileBarChart },
-  { to: "/pnl-bonus", label: "Bonus Calculator", icon: Calculator },
-  { to: "/square", label: "Square", icon: SquareIcon },
   { to: "/targets", label: "Targets", icon: Target },
-  { to: "/toast", label: "Toast", icon: Utensils },
-  { to: "/users", label: "Users", icon: Users },
+  { to: "/pnl", label: "P&L Weekly", icon: FileBarChart },
+  { to: "/pnl-qtr", label: "P&L Quarterly", icon: FileBarChart },
+  { to: "/pnl-bonus", label: "Bonus Calculator", icon: Calculator },
   { to: "/who-to-call", label: "Who to Call", icon: PhoneCall },
 ] as const;
 
@@ -44,9 +33,10 @@ export const Route = createFileRoute("/_authenticated")({
 function AuthenticatedLayout() {
   const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const settingsPaths = ["/settings", "/desserts", "/square", "/toast", "/users", "/permissions", "/locations"];
   const currentLabel =
     NAV.find((n) => pathname.startsWith(n.to))?.label ??
-    (pathname.startsWith("/settings") ? "Settings" : "KPI");
+    (settingsPaths.some((p) => pathname.startsWith(p)) ? "Settings" : "KPI");
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate({ to: "/auth" });
