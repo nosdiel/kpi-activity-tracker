@@ -381,7 +381,7 @@ function WeeklyPnlPage() {
 
           <SectionHeader label="Food Cost" />
           {foodLines.map((v, i) => (
-            <Row key={`${v.name}-${i}`} label={v.name}>
+            <Row key={`${v.name}-${i}`} label={v.name} i={i}>
               <AmountInput
                 value={v.amount ? String(v.amount) : ""}
                 onChange={(s) => updateLine(setFoodLines, i, parseNum(s))}
@@ -396,6 +396,7 @@ function WeeklyPnlPage() {
               </button>
             </Row>
           ))}
+
           <AddVendorRow
             value={newFoodVendor}
             onChange={setNewFoodVendor}
