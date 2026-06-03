@@ -181,12 +181,12 @@
 
   /* Keep the report readable while fitting one landscape page */
   .print-fit {
-    position: absolute !important;
-    inset: 0 auto auto 0 !important;
-    transform: scale(0.84);
-    transform-origin: top left;
-    width: 119.05% !important;
-    height: auto !important;
+    position: static !important;
+    transform: none !important;
+    zoom: 0.78;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: 10.45in !important;
     overflow: hidden !important;
   }
   .print-fit .text-3xl { font-size: 1.15rem !important; line-height: 1.1 !important; }
@@ -213,7 +213,7 @@
   .report-stat-card .text-xl { font-size: 0.82rem !important; line-height: 1.05 !important; }
   .report-stat-card .text-xs { font-size: 0.5rem !important; line-height: 1.05 !important; }
 
-  /* Prevent page breaks splitting the report */
+  /* Avoid splitting report sections without forcing an extra blank sheet */
   .print-fit, .print-report-card, .report-stat-grid, .report-stat-card, table, thead, tbody, tr { page-break-inside: avoid !important; break-inside: avoid !important; }
-  * { page-break-before: avoid !important; page-break-after: avoid !important; }
+  .print-fit, .print-report-card, .report-stat-grid, .report-stat-card { page-break-before: auto !important; page-break-after: auto !important; break-before: auto !important; break-after: auto !important; }
 }
