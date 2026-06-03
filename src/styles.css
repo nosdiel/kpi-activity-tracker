@@ -155,7 +155,7 @@
 /* Print: landscape, hide sidebar, fit to single page, laser-printer friendly */
 @page {
   size: letter landscape;
-  margin: 0.15in;
+  margin: 0.1in;
 }
 
 @media print {
@@ -163,9 +163,15 @@
     background: #ffffff !important;
     color: #000000 !important;
     margin: 0 !important;
-    width: 11in !important;
-    height: 8.5in !important;
-    overflow: hidden !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+  }
+  #root, .h-screen, main {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
   }
   aside, [data-print-hide] {
     display: none !important;
@@ -183,19 +189,20 @@
   .print-fit {
     position: static !important;
     transform: none !important;
-    zoom: 0.78;
+    zoom: 0.88;
     width: 100% !important;
     max-width: 100% !important;
-    height: 10.45in !important;
-    overflow: hidden !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
   }
-  .print-fit .text-3xl { font-size: 1.15rem !important; line-height: 1.1 !important; }
+  .print-fit .text-3xl { font-size: 1.3rem !important; line-height: 1.1 !important; }
   .print-report-card { border: 1px solid #0a2a5e !important; box-shadow: none !important; }
 
   .print-fit > div { gap: 0.08in !important; }
-  .report-table th { padding: 0.055in 0.065in !important; font-size: 0.52rem !important; line-height: 1.05 !important; }
-  .report-table td { padding: 0.06in 0.065in !important; font-size: 0.62rem !important; line-height: 1.08 !important; }
-  .report-table td .text-xs { font-size: 0.48rem !important; line-height: 1 !important; }
+  .report-table th { padding: 0.055in 0.06in !important; font-size: 0.62rem !important; line-height: 1.05 !important; }
+  .report-table td { padding: 0.055in 0.06in !important; font-size: 0.72rem !important; line-height: 1.08 !important; }
+  .report-table td .text-xs { font-size: 0.54rem !important; line-height: 1 !important; }
   .report-stat-grid {
     display: grid !important;
     grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
@@ -209,11 +216,12 @@
     padding: 0.075in 0.09in !important;
     min-height: 0 !important;
   }
-  .report-stat-card .text-3xl { font-size: 1rem !important; line-height: 1.05 !important; }
-  .report-stat-card .text-xl { font-size: 0.82rem !important; line-height: 1.05 !important; }
-  .report-stat-card .text-xs { font-size: 0.5rem !important; line-height: 1.05 !important; }
+  .report-stat-card .text-3xl { font-size: 1.35rem !important; line-height: 1.05 !important; }
+  .report-stat-card .text-xl { font-size: 1rem !important; line-height: 1.05 !important; }
+  .report-stat-card .text-xs { font-size: 0.62rem !important; line-height: 1.05 !important; }
 
-  /* Avoid splitting report sections without forcing an extra blank sheet */
-  .print-fit, .print-report-card, .report-stat-grid, .report-stat-card, table, thead, tbody, tr { page-break-inside: avoid !important; break-inside: avoid !important; }
-  .print-fit, .print-report-card, .report-stat-grid, .report-stat-card { page-break-before: auto !important; page-break-after: auto !important; break-before: auto !important; break-after: auto !important; }
+  /* Avoid extra blank sheets: only small repeated items avoid splitting. */
+  .print-fit, .print-report-card, .report-stat-grid, table, thead, tbody { page-break-inside: auto !important; break-inside: auto !important; }
+  tr, .report-stat-card { page-break-inside: avoid !important; break-inside: avoid !important; }
+  .print-fit, .print-report-card, .report-stat-grid, .report-stat-card, table, thead, tbody, tr { page-break-before: auto !important; page-break-after: auto !important; break-before: auto !important; break-after: auto !important; }
 }
