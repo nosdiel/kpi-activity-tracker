@@ -8,7 +8,7 @@ const NAV = [
   { to: "/locations", label: "Locations" },
   { to: "/permissions", label: "Permissions" },
   { to: "/pnl", label: "P&L" },
-  { to: "/pnl-bonus", label: "P&L Bonus" },
+  { to: "/pnl-bonus", label: "Bonus Calculator" },
   { to: "/pnl-qtr", label: "P&L Qtr" },
   { to: "/square", label: "Square" },
   { to: "/targets", label: "Targets" },
