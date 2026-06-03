@@ -36,6 +36,12 @@ type WeeklyPnlRow = {
   repairs: number | null;
 };
 
+const DEFAULT_FOOD_VENDORS: readonly string[] = [
+  "Sysco", "The Cafe Group", "CBI", "All Coffee",
+  "Cortes (Soda)", "CP Oil (Veg, Oil)", "Vicky Enterprises", "Joy's Kitchen",
+];
+const DEFAULT_PAPER_VENDORS: readonly string[] = ["All Florida Paper", "Dade Paper"];
+
 const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (n: number) => `${(n * 100).toFixed(2)}%`;
@@ -117,6 +123,21 @@ function WeeklyPnlPage() {
       return (data ?? []) as Vendor[];
     },
   });
+
+  // Auto-seed default vendors for a location the first time it's used.
+  useEffect(() => {
+    if (!locationId || !vendorsQ.data) return;
+    const haveFood = vendorsQ.data.some((v) => v.section === "food_cost");
+    const havePaper = vendorsQ.data.some((v) => v.section === "paper_supplies");
+    const toInsert: Array<{ name: string; section: string; sort_order: number; active: boolean; location_id: string }> = [];
+    if (!haveFood) DEFAULT_FOOD_VENDORS.forEach((n, i) => toInsert.push({ name: n, section: "food_cost", sort_order: (i + 1) * 10, active: true, location_id: locationId }));
+    if (!havePaper) DEFAULT_PAPER_VENDORS.forEach((n, i) => toInsert.push({ name: n, section: "paper_supplies", sort_order: (i + 1) * 10, active: true, location_id: locationId }));
+    if (toInsert.length === 0) return;
+    (async () => {
+      const { error } = await supabase.from("pnl_vendors").insert(toInsert);
+      if (!error) qc.invalidateQueries({ queryKey: ["pnl-vendors", locationId] });
+    })();
+  }, [locationId, vendorsQ.data, qc]);
 
   // Vendor amounts for this week
   const amountsQ = useQuery({
