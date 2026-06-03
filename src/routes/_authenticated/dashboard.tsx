@@ -283,10 +283,10 @@ function DashboardPage() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden print-report-card">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-primary text-primary-foreground">
+          <table className="w-full text-sm report-table">
+            <thead className="report-thead">
               <tr>
                 <Th>Days</Th>
                 <Th right>LY Sales</Th>
@@ -302,8 +302,8 @@ function DashboardPage() {
               </tr>
             </thead>
             <tbody>
-              {rows.map((r) => (
-                <tr key={r.date} className="border-b last:border-0">
+              {rows.map((r, idx) => (
+                <tr key={r.date} className={idx % 2 === 0 ? "report-row-odd" : "report-row-even"}>
                   <td className="px-4 py-3">
                     <div className="font-medium">{r.day}</div>
                     <div className="text-xs text-muted-foreground">{r.date}</div>
@@ -324,7 +324,7 @@ function DashboardPage() {
                   <Td right>{num(r.dessertMonth)}</Td>
                 </tr>
               ))}
-              <tr className="bg-muted/50 font-semibold border-t-2">
+              <tr className="report-totals font-semibold">
                 <td className="px-4 py-3">Totals</td>
                 <Td right>{money(totals.ly)}</Td>
                 <Td right>{money(totals.target)}</Td>
