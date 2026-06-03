@@ -43,10 +43,15 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthenticatedLayout() {
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const currentLabel =
+    NAV.find((n) => pathname.startsWith(n.to))?.label ??
+    (pathname.startsWith("/settings") ? "Settings" : "KPI");
   const handleSignOut = async () => {
     await supabase.auth.signOut();
     navigate({ to: "/auth" });
   };
+
 
   return (
     <div className="flex h-screen bg-background">
