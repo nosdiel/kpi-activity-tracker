@@ -1,171 +1,263 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Plus, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/desserts")({
-  head: () => ({ meta: [{ title: "Daily Sales Entry — NiNi KPI" }] }),
-  component: DailyEntryPage,
+  head: () => ({ meta: [{ title: "Trackable Items — NiNi KPI" }] }),
+  component: TrackableItemsPage,
 });
 
-function todayISO() { return new Date().toISOString().slice(0, 10); }
+type ItemRow = {
+  id: string;
+  name: string;
+  location_id: string;
+  active_from: string | null;
+  active_to: string | null;
+  pos_product: string | null;
+};
 
-function DailyEntryPage() {
+type LocationRow = { id: string; name: string };
+
+type FormState = {
+  id?: string;
+  name: string;
+  location_id: string;
+  active_from: string;
+  active_to: string;
+  pos_product: string;
+};
+
+const EMPTY_FORM: FormState = {
+  name: "",
+  location_id: "",
+  active_from: "",
+  active_to: "",
+  pos_product: "",
+};
+
+function isActive(from: string | null, to: string | null) {
+  const today = new Date().toISOString().slice(0, 10);
+  if (from && today < from) return false;
+  if (to && today > to) return false;
+  return true;
+}
+
+function TrackableItemsPage() {
   const qc = useQueryClient();
-  const [form, setForm] = useState({
-    location_id: "",
-    business_date: todayISO(),
-    actual_sales: "",
-    actual_customer_count: "",
-    last_year_sales: "",
-    last_year_customer_count: "",
-    dessert_count: "",
-  });
+  const [open, setOpen] = useState(false);
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
 
   const locationsQ = useQuery({
-    queryKey: ["locations", "active"],
+    queryKey: ["locations", "all"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("locations").select("id,name").eq("active", true).order("name");
+      const { data, error } = await supabase.from("locations").select("id,name").order("name");
       if (error) throw error;
-      return data ?? [];
+      return (data ?? []) as LocationRow[];
     },
   });
 
-  const insertMut = useMutation({
-    mutationFn: async () => {
-      if (!form.location_id) throw new Error("Pick a location");
-      const payload: Record<string, unknown> = {
-        location_id: form.location_id,
-        business_date: form.business_date,
-        actual_sales: Number(form.actual_sales) || 0,
-        actual_customer_count: Number(form.actual_customer_count) || 0,
-        last_year_sales: Number(form.last_year_sales) || 0,
-        last_year_customer_count: Number(form.last_year_customer_count) || 0,
-        dessert_count: Number(form.dessert_count) || 0,
-        source: "manual",
-      };
-      // Upsert by (location_id, business_date) so re-entering edits in place.
-      const { error } = await supabase.from("daily_sales").upsert(payload, {
-        onConflict: "location_id,business_date",
-      });
+  const itemsQ = useQuery({
+    queryKey: ["trackable_items", "all"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("trackable_items")
+        .select("*")
+        .order("name");
       if (error) throw error;
+      return (data ?? []) as ItemRow[];
+    },
+  });
+
+  const locName = useMemo(() => {
+    const m = new Map<string, string>();
+    (locationsQ.data ?? []).forEach((l) => m.set(l.id, l.name));
+    return m;
+  }, [locationsQ.data]);
+
+  const saveMut = useMutation({
+    mutationFn: async (f: FormState) => {
+      const name = f.name.trim();
+      if (!name) throw new Error("Name is required");
+      if (!f.location_id) throw new Error("Location is required");
+      const payload = {
+        name,
+        location_id: f.location_id,
+        active_from: f.active_from || null,
+        active_to: f.active_to || null,
+        pos_product: f.pos_product.trim() || null,
+      };
+      if (f.id) {
+        const { error } = await supabase.from("trackable_items").update(payload).eq("id", f.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("trackable_items").insert(payload);
+        if (error) throw error;
+      }
     },
     onSuccess: () => {
-      toast.success("Daily sales saved");
-      setForm((f) => ({
-        ...f,
-        actual_sales: "", actual_customer_count: "",
-        last_year_sales: "", last_year_customer_count: "",
-        dessert_count: "",
-      }));
-      qc.invalidateQueries({ queryKey: ["daily_sales"] });
-      qc.invalidateQueries({ queryKey: ["recent_sales"] });
+      toast.success(form.id ? "Item updated" : "Item added");
+      setOpen(false);
+      setForm(EMPTY_FORM);
+      qc.invalidateQueries({ queryKey: ["trackable_items"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const recentQ = useQuery({
-    queryKey: ["recent_sales", form.location_id],
-    queryFn: async () => {
-      let q = supabase.from("daily_sales")
-        .select("business_date,actual_sales,actual_customer_count,dessert_count,location_id")
-        .order("business_date", { ascending: false })
-        .limit(10);
-      if (form.location_id) q = q.eq("location_id", form.location_id);
-      const { data, error } = await q;
+  const delMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("trackable_items").delete().eq("id", id);
       if (error) throw error;
-      return data ?? [];
     },
+    onSuccess: () => {
+      toast.success("Item deleted");
+      qc.invalidateQueries({ queryKey: ["trackable_items"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
   });
 
-  const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setForm((f) => ({ ...f, [k]: e.target.value }));
+  const openNew = () => { setForm(EMPTY_FORM); setOpen(true); };
+  const openEdit = (r: ItemRow) => {
+    setForm({
+      id: r.id,
+      name: r.name,
+      location_id: r.location_id,
+      active_from: r.active_from ?? "",
+      active_to: r.active_to ?? "",
+      pos_product: r.pos_product ?? "",
+    });
+    setOpen(true);
+  };
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">NiNi - KPI</p>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Daily Sales Entry</h1>
-        <p className="text-sm text-muted-foreground mt-1">Record actuals + LY comparison for any date and location. Re-entering the same date overwrites.</p>
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-foreground">Trackable Items</h1>
+          <p className="text-sm text-muted-foreground mt-1">Items tracked per location with active windows.</p>
+        </div>
+        <Button onClick={openNew}>
+          <Plus className="h-4 w-4 mr-1" /> New item
+        </Button>
       </div>
 
-      <Card>
-        <CardHeader><CardTitle>New entry</CardTitle></CardHeader>
-        <CardContent>
+      {itemsQ.error ? (
+        <p className="text-sm text-destructive">{(itemsQ.error as Error).message}</p>
+      ) : itemsQ.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading...</p>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Item</TableHead>
+              <TableHead>Location</TableHead>
+              <TableHead>Active window</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="w-[120px]"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(itemsQ.data ?? []).length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="text-sm text-muted-foreground text-center py-8">
+                  No items yet. Click "New item" to add one.
+                </TableCell>
+              </TableRow>
+            ) : (
+              (itemsQ.data ?? []).map((row) => {
+                const active = isActive(row.active_from, row.active_to);
+                return (
+                  <TableRow key={row.id}>
+                    <TableCell className="font-medium">{row.name}</TableCell>
+                    <TableCell>{locName.get(row.location_id) ?? "—"}</TableCell>
+                    <TableCell className="text-muted-foreground">
+                      {row.active_from ?? "—"} → {row.active_to ?? "—"}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={active ? "default" : "secondary"}>
+                        {active ? "Active" : "Inactive"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="flex gap-1">
+                      <Button size="icon" variant="ghost" onClick={() => openEdit(row)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button size="icon" variant="ghost" onClick={() => delMut.mutate(row.id)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      )}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{form.id ? "Edit item" : "New item"}</DialogTitle>
+          </DialogHeader>
           <form
-            className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"
-            onSubmit={(e) => { e.preventDefault(); insertMut.mutate(); }}
+            className="space-y-4"
+            onSubmit={(e) => { e.preventDefault(); saveMut.mutate(form); }}
           >
             <div className="space-y-2">
+              <Label>Name</Label>
+              <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} autoFocus />
+            </div>
+            <div className="space-y-2">
               <Label>Location</Label>
-              <Select value={form.location_id} onValueChange={(v) => setForm((f) => ({ ...f, location_id: v }))}>
+              <Select value={form.location_id} onValueChange={(v) => setForm({ ...form, location_id: v })}>
                 <SelectTrigger><SelectValue placeholder="Pick a location" /></SelectTrigger>
                 <SelectContent>
-                  {(locationsQ.data ?? []).map((l: { id: string; name: string }) => (
+                  {(locationsQ.data ?? []).map((l) => (
                     <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Active from</Label>
+                <Input type="date" value={form.active_from} onChange={(e) => setForm({ ...form, active_from: e.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Active to</Label>
+                <Input type="date" value={form.active_to} onChange={(e) => setForm({ ...form, active_to: e.target.value })} />
+              </div>
+            </div>
             <div className="space-y-2">
-              <Label>Business date</Label>
-              <Input type="date" value={form.business_date} onChange={set("business_date")} />
+              <Label>POS product (optional)</Label>
+              <Input
+                value={form.pos_product}
+                onChange={(e) => setForm({ ...form, pos_product: e.target.value })}
+                placeholder="e.g. Chicken - Croquette"
+              />
             </div>
-            <div />
-            <div className="space-y-2"><Label>Actual sales ($)</Label><Input inputMode="decimal" value={form.actual_sales} onChange={set("actual_sales")} /></div>
-            <div className="space-y-2"><Label>Actual customers</Label><Input inputMode="numeric" value={form.actual_customer_count} onChange={set("actual_customer_count")} /></div>
-            <div className="space-y-2"><Label>Desserts sold</Label><Input inputMode="numeric" value={form.dessert_count} onChange={set("dessert_count")} /></div>
-            <div className="space-y-2"><Label>Last year sales ($)</Label><Input inputMode="decimal" value={form.last_year_sales} onChange={set("last_year_sales")} /></div>
-            <div className="space-y-2"><Label>Last year customers</Label><Input inputMode="numeric" value={form.last_year_customer_count} onChange={set("last_year_customer_count")} /></div>
-            <div className="flex items-end">
-              <Button type="submit" disabled={insertMut.isPending} className="w-full">
-                {insertMut.isPending ? "Saving..." : "Save entry"}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
+              <Button type="submit" disabled={saveMut.isPending}>
+                {saveMut.isPending ? "Saving..." : "Save"}
               </Button>
-            </div>
+            </DialogFooter>
           </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent entries</CardTitle>
-          <CardDescription>Last 10 records{form.location_id ? " for this location" : ""}</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {recentQ.isLoading ? (
-            <p className="text-sm text-muted-foreground">Loading...</p>
-          ) : (recentQ.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No entries yet.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead className="text-muted-foreground">
-                <tr>
-                  <th className="text-left py-2">Date</th>
-                  <th className="text-right">Sales</th>
-                  <th className="text-right">Customers</th>
-                  <th className="text-right">Desserts</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(recentQ.data ?? []).map((r, i) => (
-                  <tr key={i} className="border-t">
-                    <td className="py-2">{r.business_date as string}</td>
-                    <td className="text-right">${Number(r.actual_sales).toLocaleString()}</td>
-                    <td className="text-right">{Number(r.actual_customer_count).toLocaleString()}</td>
-                    <td className="text-right">{Number(r.dessert_count).toLocaleString()}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
