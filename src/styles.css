@@ -143,16 +143,18 @@
   }
 }
 
-/* Print: landscape, hide sidebar, laser-printer friendly */
+/* Print: landscape, hide sidebar, fit to single page, laser-printer friendly */
 @page {
   size: landscape;
-  margin: 0.4in;
+  margin: 0.25in;
 }
 
 @media print {
   html, body {
     background: #ffffff !important;
     color: #000000 !important;
+    width: 100% !important;
+    height: auto !important;
   }
   aside, [data-print-hide] {
     display: none !important;
@@ -160,15 +162,35 @@
   main {
     overflow: visible !important;
     padding: 0 !important;
+    height: auto !important;
   }
-  /* Preserve our zebra striping when printing */
-  .print-zebra-odd { background-color: #ffffff !important; }
-  .print-zebra-even { background-color: #eaf2fb !important; }
   /* Force colors to print */
   * {
     -webkit-print-color-adjust: exact !important;
     print-color-adjust: exact !important;
   }
-  /* Avoid splitting key blocks */
-  .pnl-card { break-inside: avoid; }
+  /* Zebra striping kept */
+  .print-zebra-odd { background-color: #ffffff !important; }
+  .print-zebra-even { background-color: #eaf2fb !important; }
+
+  /* Shrink everything to fit a single landscape page */
+  .print-fit {
+    transform: scale(0.65);
+    transform-origin: top left;
+    width: 153.85%;
+    page-break-after: avoid;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+  .print-fit h1 { font-size: 1.25rem !important; }
+  .print-fit h2 { font-size: 1rem !important; }
+  .print-fit .text-3xl { font-size: 1.25rem !important; }
+  .print-fit p, .print-fit span, .print-fit td, .print-fit th, .print-fit div {
+    line-height: 1.2 !important;
+  }
+  /* Hide filter selectors when printing — header bar shows context */
+  [data-print-filters] { display: none !important; }
+
+  /* Prevent forced page breaks */
+  * { page-break-inside: avoid !important; break-inside: avoid !important; }
 }
