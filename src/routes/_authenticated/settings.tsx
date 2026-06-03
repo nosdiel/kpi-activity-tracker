@@ -27,6 +27,7 @@ const groups = [
     title: "Data",
     description: "Configure what gets tracked across the app.",
     items: [
+      { to: "/targets", label: "Sales Target", icon: Target, description: "Set sales targets by location and period." },
       { to: "/desserts", label: "Trackable Items", icon: IceCream, description: "Manage the items tracked in daily sales activity." },
     ],
   },
