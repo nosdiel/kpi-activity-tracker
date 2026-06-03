@@ -142,3 +142,33 @@
     color: var(--color-foreground);
   }
 }
+
+/* Print: landscape, hide sidebar, laser-printer friendly */
+@page {
+  size: landscape;
+  margin: 0.4in;
+}
+
+@media print {
+  html, body {
+    background: #ffffff !important;
+    color: #000000 !important;
+  }
+  aside, [data-print-hide] {
+    display: none !important;
+  }
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+  /* Preserve our zebra striping when printing */
+  .print-zebra-odd { background-color: #ffffff !important; }
+  .print-zebra-even { background-color: #eaf2fb !important; }
+  /* Force colors to print */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Avoid splitting key blocks */
+  .pnl-card { break-inside: avoid; }
+}

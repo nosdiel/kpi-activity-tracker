@@ -360,26 +360,28 @@ function WeeklyPnlPage() {
         </div>
 
         <div className="divide-y">
-          <Row label="Food Sales (from daily sales)">
+          <Row label="Food Sales (from daily sales)" i={0}>
             <ReadonlyAmount value={foodSales} />
             <PctCell>—</PctCell>
           </Row>
-          <Row label="Catering">
+          <Row label="Catering" i={1}>
             <AmountInput value={catering} onChange={setCatering} />
             <PctCell>{pctFmt(pctOf(cateringN))}</PctCell>
           </Row>
+
           <TotalRow label="Total Sales" value={money(totalSales)} />
 
           <SectionHeader label="Payroll" />
-          <Row label="Wages">
+          <Row label="Wages" i={0}>
             <AmountInput value={wages} onChange={setWages} />
             <PctCell>{pctFmt(pctOf(wagesN))}</PctCell>
           </Row>
+
           <TotalRow label="Total Payroll 20%" value={money(wagesN)} pct={pctFmt(pctOf(wagesN))} />
 
           <SectionHeader label="Food Cost" />
           {foodLines.map((v, i) => (
-            <Row key={`${v.name}-${i}`} label={v.name}>
+            <Row key={`${v.name}-${i}`} label={v.name} i={i}>
               <AmountInput
                 value={v.amount ? String(v.amount) : ""}
                 onChange={(s) => updateLine(setFoodLines, i, parseNum(s))}
@@ -394,6 +396,7 @@ function WeeklyPnlPage() {
               </button>
             </Row>
           ))}
+
           <AddVendorRow
             value={newFoodVendor}
             onChange={setNewFoodVendor}
@@ -403,7 +406,7 @@ function WeeklyPnlPage() {
 
           <SectionHeader label="Paper Supplies" />
           {paperLines.map((v, i) => (
-            <Row key={`${v.name}-${i}`} label={v.name}>
+            <Row key={`${v.name}-${i}`} label={v.name} i={i}>
               <AmountInput
                 value={v.amount ? String(v.amount) : ""}
                 onChange={(s) => updateLine(setPaperLines, i, parseNum(s))}
@@ -418,6 +421,7 @@ function WeeklyPnlPage() {
               </button>
             </Row>
           ))}
+
           <AddVendorRow
             value={newPaperVendor}
             onChange={setNewPaperVendor}
@@ -425,10 +429,11 @@ function WeeklyPnlPage() {
           />
           <TotalRow label="Total (3%)" value={money(paperTotal)} pct={pctFmt(pctOf(paperTotal))} />
 
-          <Row label="Total Repairs 1%">
+          <Row label="Total Repairs 1%" i={0}>
             <AmountInput value={repairs} onChange={setRepairs} />
             <PctCell>{pctFmt(pctOf(repairsN))}</PctCell>
           </Row>
+
 
           <div className="bg-foreground text-background px-6 py-4 flex items-center justify-between">
             <span className="font-semibold">Total Cost of Goods</span>
@@ -456,14 +461,16 @@ function SectionHeader({ label }: { label: string }) {
   return <div className="px-6 py-3 font-semibold text-foreground bg-muted/30">{label}</div>;
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+function Row({ label, children, i = 0 }: { label: string; children: React.ReactNode; i?: number }) {
+  const stripe = i % 2 === 0 ? "bg-white print-zebra-odd" : "bg-[#eaf2fb] print-zebra-even";
   return (
-    <div className="px-6 py-2.5 flex items-center justify-between gap-4">
+    <div className={`px-6 py-2.5 flex items-center justify-between gap-4 ${stripe}`}>
       <span className="text-sm text-foreground">{label}</span>
       <div className="flex items-center gap-3">{children}</div>
     </div>
   );
 }
+
 
 function TotalRow({ label, value, pct }: { label: string; value: string; pct?: string }) {
   return (
