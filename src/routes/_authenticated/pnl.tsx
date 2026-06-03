@@ -349,12 +349,12 @@ function WeeklyPnlPage() {
       </Card>
 
       <Card className="overflow-hidden print-compact-card">
-        <div className="bg-primary text-primary-foreground px-6 py-4 flex items-center justify-between">
+        <div className="bg-[#1d6fd8] text-white px-6 py-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold italic">Week {week ?? "—"}</h2>
             <p className="text-xs opacity-90">{dates[0] ? `${fmtMD(dates[0])} → ${fmtMD(dates[6])}` : ""} · Q{quarter} · P{period}</p>
           </div>
-          <Button size="sm" onClick={handleSave} disabled={saving} className="bg-blue-600 hover:bg-blue-700 text-white">
+          <Button size="sm" onClick={handleSave} disabled={saving} className="bg-[#2563eb] hover:bg-[#1d4ed8] text-white">
             <Save className="h-4 w-4 mr-2" /> {saving ? "Saving..." : "Save"}
           </Button>
         </div>
