@@ -49,9 +49,9 @@ function AuthenticatedLayout() {
   };
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex h-screen bg-background">
       <aside
-        className="hidden w-60 shrink-0 p-4 md:flex md:flex-col"
+        className="hidden w-60 shrink-0 p-4 md:flex md:flex-col md:sticky md:top-0 md:h-screen"
         style={{ backgroundColor: "#0a2a5e", color: "#ffffff" }}
       >
         <div className="mb-6 px-2">
@@ -100,7 +100,7 @@ function AuthenticatedLayout() {
           </Button>
         </div>
       </aside>
-      <main className="flex-1 overflow-x-auto p-6 md:p-10">
+      <main className="flex-1 overflow-y-auto p-6 md:p-10">
         <Outlet />
       </main>
     </div>
