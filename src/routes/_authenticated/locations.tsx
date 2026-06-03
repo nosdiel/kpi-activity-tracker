@@ -10,6 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import {
   Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Pencil } from "lucide-react";
 import { toast } from "sonner";
@@ -56,6 +59,15 @@ function LocationsPage() {
       const { data, error } = await supabase.from("locations").select("*").order("name");
       if (error) throw error;
       return (data ?? []) as LocationRow[];
+    },
+  });
+
+  const regionsQ = useQuery({
+    queryKey: ["regions", "all"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("regions").select("id,name").order("name");
+      if (error) throw error;
+      return (data ?? []) as { id: string; name: string }[];
     },
   });
 
@@ -175,7 +187,25 @@ function LocationsPage() {
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">
                 <Label>Region</Label>
-                <Input value={form.region} onChange={(e) => setForm({ ...form, region: e.target.value })} />
+                <Select
+                  value={form.region || "__none__"}
+                  onValueChange={(v) => setForm({ ...form, region: v === "__none__" ? "" : v })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={regionsQ.isLoading ? "Loading..." : "Select a region"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">— None —</SelectItem>
+                    {(regionsQ.data ?? []).map((r) => (
+                      <SelectItem key={r.id} value={r.name}>{r.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {(regionsQ.data ?? []).length === 0 && !regionsQ.isLoading && (
+                  <p className="text-xs text-muted-foreground">
+                    No regions yet. Add them in Settings → Regions.
+                  </p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Timezone</Label>
