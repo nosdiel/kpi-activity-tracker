@@ -13,6 +13,11 @@ import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthCallbackRouteImport } from './routes/auth.callback'
+import { Route as AuthenticatedWhoToCallRouteImport } from './routes/_authenticated/who-to-call'
+import { Route as AuthenticatedUsersRouteImport } from './routes/_authenticated/users'
+import { Route as AuthenticatedToastRouteImport } from './routes/_authenticated/toast'
+import { Route as AuthenticatedTargetsRouteImport } from './routes/_authenticated/targets'
+import { Route as AuthenticatedSquareRouteImport } from './routes/_authenticated/square'
 import { Route as AuthenticatedPnlQtrRouteImport } from './routes/_authenticated/pnl-qtr'
 import { Route as AuthenticatedPnlBonusRouteImport } from './routes/_authenticated/pnl-bonus'
 import { Route as AuthenticatedPnlRouteImport } from './routes/_authenticated/pnl'
@@ -39,6 +44,31 @@ const AuthCallbackRoute = AuthCallbackRouteImport.update({
   id: '/callback',
   path: '/callback',
   getParentRoute: () => AuthRoute,
+} as any)
+const AuthenticatedWhoToCallRoute = AuthenticatedWhoToCallRouteImport.update({
+  id: '/who-to-call',
+  path: '/who-to-call',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedUsersRoute = AuthenticatedUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedToastRoute = AuthenticatedToastRouteImport.update({
+  id: '/toast',
+  path: '/toast',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedTargetsRoute = AuthenticatedTargetsRouteImport.update({
+  id: '/targets',
+  path: '/targets',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSquareRoute = AuthenticatedSquareRouteImport.update({
+  id: '/square',
+  path: '/square',
+  getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedPnlQtrRoute = AuthenticatedPnlQtrRouteImport.update({
   id: '/pnl-qtr',
@@ -87,6 +117,11 @@ export interface FileRoutesByFullPath {
   '/pnl': typeof AuthenticatedPnlRoute
   '/pnl-bonus': typeof AuthenticatedPnlBonusRoute
   '/pnl-qtr': typeof AuthenticatedPnlQtrRoute
+  '/square': typeof AuthenticatedSquareRoute
+  '/targets': typeof AuthenticatedTargetsRoute
+  '/toast': typeof AuthenticatedToastRoute
+  '/users': typeof AuthenticatedUsersRoute
+  '/who-to-call': typeof AuthenticatedWhoToCallRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesByTo {
@@ -99,6 +134,11 @@ export interface FileRoutesByTo {
   '/pnl': typeof AuthenticatedPnlRoute
   '/pnl-bonus': typeof AuthenticatedPnlBonusRoute
   '/pnl-qtr': typeof AuthenticatedPnlQtrRoute
+  '/square': typeof AuthenticatedSquareRoute
+  '/targets': typeof AuthenticatedTargetsRoute
+  '/toast': typeof AuthenticatedToastRoute
+  '/users': typeof AuthenticatedUsersRoute
+  '/who-to-call': typeof AuthenticatedWhoToCallRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRoutesById {
@@ -113,6 +153,11 @@ export interface FileRoutesById {
   '/_authenticated/pnl': typeof AuthenticatedPnlRoute
   '/_authenticated/pnl-bonus': typeof AuthenticatedPnlBonusRoute
   '/_authenticated/pnl-qtr': typeof AuthenticatedPnlQtrRoute
+  '/_authenticated/square': typeof AuthenticatedSquareRoute
+  '/_authenticated/targets': typeof AuthenticatedTargetsRoute
+  '/_authenticated/toast': typeof AuthenticatedToastRoute
+  '/_authenticated/users': typeof AuthenticatedUsersRoute
+  '/_authenticated/who-to-call': typeof AuthenticatedWhoToCallRoute
   '/auth/callback': typeof AuthCallbackRoute
 }
 export interface FileRouteTypes {
@@ -127,6 +172,11 @@ export interface FileRouteTypes {
     | '/pnl'
     | '/pnl-bonus'
     | '/pnl-qtr'
+    | '/square'
+    | '/targets'
+    | '/toast'
+    | '/users'
+    | '/who-to-call'
     | '/auth/callback'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -139,6 +189,11 @@ export interface FileRouteTypes {
     | '/pnl'
     | '/pnl-bonus'
     | '/pnl-qtr'
+    | '/square'
+    | '/targets'
+    | '/toast'
+    | '/users'
+    | '/who-to-call'
     | '/auth/callback'
   id:
     | '__root__'
@@ -152,6 +207,11 @@ export interface FileRouteTypes {
     | '/_authenticated/pnl'
     | '/_authenticated/pnl-bonus'
     | '/_authenticated/pnl-qtr'
+    | '/_authenticated/square'
+    | '/_authenticated/targets'
+    | '/_authenticated/toast'
+    | '/_authenticated/users'
+    | '/_authenticated/who-to-call'
     | '/auth/callback'
   fileRoutesById: FileRoutesById
 }
@@ -190,6 +250,41 @@ declare module '@tanstack/react-router' {
       fullPath: '/auth/callback'
       preLoaderRoute: typeof AuthCallbackRouteImport
       parentRoute: typeof AuthRoute
+    }
+    '/_authenticated/who-to-call': {
+      id: '/_authenticated/who-to-call'
+      path: '/who-to-call'
+      fullPath: '/who-to-call'
+      preLoaderRoute: typeof AuthenticatedWhoToCallRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/users': {
+      id: '/_authenticated/users'
+      path: '/users'
+      fullPath: '/users'
+      preLoaderRoute: typeof AuthenticatedUsersRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/toast': {
+      id: '/_authenticated/toast'
+      path: '/toast'
+      fullPath: '/toast'
+      preLoaderRoute: typeof AuthenticatedToastRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/targets': {
+      id: '/_authenticated/targets'
+      path: '/targets'
+      fullPath: '/targets'
+      preLoaderRoute: typeof AuthenticatedTargetsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/square': {
+      id: '/_authenticated/square'
+      path: '/square'
+      fullPath: '/square'
+      preLoaderRoute: typeof AuthenticatedSquareRouteImport
+      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/pnl-qtr': {
       id: '/_authenticated/pnl-qtr'
@@ -251,6 +346,11 @@ interface AuthenticatedRouteChildren {
   AuthenticatedPnlRoute: typeof AuthenticatedPnlRoute
   AuthenticatedPnlBonusRoute: typeof AuthenticatedPnlBonusRoute
   AuthenticatedPnlQtrRoute: typeof AuthenticatedPnlQtrRoute
+  AuthenticatedSquareRoute: typeof AuthenticatedSquareRoute
+  AuthenticatedTargetsRoute: typeof AuthenticatedTargetsRoute
+  AuthenticatedToastRoute: typeof AuthenticatedToastRoute
+  AuthenticatedUsersRoute: typeof AuthenticatedUsersRoute
+  AuthenticatedWhoToCallRoute: typeof AuthenticatedWhoToCallRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
@@ -261,6 +361,11 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedPnlRoute: AuthenticatedPnlRoute,
   AuthenticatedPnlBonusRoute: AuthenticatedPnlBonusRoute,
   AuthenticatedPnlQtrRoute: AuthenticatedPnlQtrRoute,
+  AuthenticatedSquareRoute: AuthenticatedSquareRoute,
+  AuthenticatedTargetsRoute: AuthenticatedTargetsRoute,
+  AuthenticatedToastRoute: AuthenticatedToastRoute,
+  AuthenticatedUsersRoute: AuthenticatedUsersRoute,
+  AuthenticatedWhoToCallRoute: AuthenticatedWhoToCallRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
