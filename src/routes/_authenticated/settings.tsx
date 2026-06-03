@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { IceCream, ArrowDownToLine, Utensils, Users, Shield, MapPin } from "lucide-react";
+import { IceCream, ArrowDownToLine, Utensils, Users, Shield, MapPin, Target } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
