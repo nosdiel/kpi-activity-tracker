@@ -298,7 +298,7 @@ function WeeklyPnlPage() {
         </div>
       </div>
 
-      <Card>
+      <Card data-print-filters>
         <CardContent className="pt-6 grid gap-4 md:grid-cols-4">
           <Field label="Location">
             <Select value={locationId} onValueChange={setLocationId}>
