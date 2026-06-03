@@ -287,7 +287,7 @@ function WeeklyPnlPage() {
             {locName} · FY{fy ?? "—"} · Period {period} · Week {week ?? "—"}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2" data-print-actions>
           <Button variant="outline" size="sm" disabled>Weekly PNL</Button>
           <Button variant="outline" size="sm" asChild>
             <Link to="/pnl-qtr">QTR Report</Link>
@@ -348,7 +348,7 @@ function WeeklyPnlPage() {
         </CardContent>
       </Card>
 
-      <Card className="overflow-hidden">
+      <Card className="overflow-hidden print-compact-card">
         <div className="bg-primary text-primary-foreground px-6 py-4 flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold italic">Week {week ?? "—"}</h2>
@@ -458,13 +458,13 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 function SectionHeader({ label }: { label: string }) {
-  return <div className="px-6 py-3 font-semibold text-foreground bg-muted/30">{label}</div>;
+  return <div className="px-6 py-3 font-semibold text-foreground bg-muted/30 print-section">{label}</div>;
 }
 
 function Row({ label, children, i = 0 }: { label: string; children: React.ReactNode; i?: number }) {
   const stripe = i % 2 === 0 ? "bg-white print-zebra-odd" : "bg-[#eaf2fb] print-zebra-even";
   return (
-    <div className={`px-6 py-2.5 flex items-center justify-between gap-4 ${stripe}`}>
+    <div className={`px-6 py-2.5 flex items-center justify-between gap-4 print-row ${stripe}`}>
       <span className="text-sm text-foreground">{label}</span>
       <div className="flex items-center gap-3">{children}</div>
     </div>
@@ -474,7 +474,7 @@ function Row({ label, children, i = 0 }: { label: string; children: React.ReactN
 
 function TotalRow({ label, value, pct }: { label: string; value: string; pct?: string }) {
   return (
-    <div className="px-6 py-3 bg-muted/50 flex items-center justify-between font-semibold">
+    <div className="px-6 py-3 bg-muted/50 flex items-center justify-between font-semibold print-total">
       <span>{label}</span>
       <div className="flex items-center gap-6">
         <span className="tabular-nums">{value}</span>
@@ -506,7 +506,7 @@ function PctCell({ children }: { children: React.ReactNode }) {
 
 function AddVendorRow({ value, onChange, onAdd }: { value: string; onChange: (v: string) => void; onAdd: () => void }) {
   return (
-    <div className="px-6 py-2.5 flex items-center gap-2">
+    <div className="px-6 py-2.5 flex items-center gap-2" data-print-add-row>
       <Input
         className="w-64"
         placeholder="Add vendor..."

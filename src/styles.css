@@ -145,24 +145,28 @@
 
 /* Print: landscape, hide sidebar, fit to single page, laser-printer friendly */
 @page {
-  size: landscape;
-  margin: 0.25in;
+  size: letter landscape;
+  margin: 0.15in;
 }
 
 @media print {
   html, body {
     background: #ffffff !important;
     color: #000000 !important;
-    width: 100% !important;
-    height: auto !important;
+    width: 11in !important;
+    height: 8.5in !important;
+    margin: 0 !important;
+    overflow: hidden !important;
   }
   aside, [data-print-hide] {
     display: none !important;
   }
   main {
+    position: relative !important;
     overflow: visible !important;
     padding: 0 !important;
-    height: auto !important;
+    height: 8.2in !important;
+    width: 10.7in !important;
   }
   /* Force colors to print */
   * {
@@ -175,22 +179,34 @@
 
   /* Shrink everything to fit a single landscape page */
   .print-fit {
-    transform: scale(0.65);
+    position: absolute !important;
+    top: 0.36in !important;
+    left: 0 !important;
+    transform: scale(0.62);
     transform-origin: top left;
-    width: 153.85%;
-    page-break-after: avoid;
-    page-break-inside: avoid;
-    break-inside: avoid;
+    width: 161.29% !important;
+    max-height: none !important;
+    page-break-after: avoid !important;
+    page-break-before: avoid !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
   }
-  .print-fit h1 { font-size: 1.25rem !important; }
-  .print-fit h2 { font-size: 1rem !important; }
-  .print-fit .text-3xl { font-size: 1.25rem !important; }
+  .print-fit h1 { font-size: 1.1rem !important; }
+  .print-fit h2 { font-size: 0.95rem !important; }
+  .print-fit .text-3xl { font-size: 1.1rem !important; }
   .print-fit p, .print-fit span, .print-fit td, .print-fit th, .print-fit div {
-    line-height: 1.2 !important;
+    line-height: 1.12 !important;
   }
   /* Hide filter selectors when printing — header bar shows context */
-  [data-print-filters] { display: none !important; }
+  [data-print-filters], [data-print-actions], [data-print-add-row] { display: none !important; }
+
+  .print-compact-card { border: 1px solid #333333 !important; box-shadow: none !important; }
+  .print-fit button { display: none !important; }
+  .print-row { min-height: 0 !important; padding-top: 0.22rem !important; padding-bottom: 0.22rem !important; }
+  .print-section { padding-top: 0.32rem !important; padding-bottom: 0.32rem !important; }
+  .print-total { padding-top: 0.32rem !important; padding-bottom: 0.32rem !important; }
+  input { height: 1.45rem !important; padding-top: 0 !important; padding-bottom: 0 !important; }
 
   /* Prevent forced page breaks */
-  * { page-break-inside: avoid !important; break-inside: avoid !important; }
+  * { page-break-before: avoid !important; page-break-after: avoid !important; }
 }

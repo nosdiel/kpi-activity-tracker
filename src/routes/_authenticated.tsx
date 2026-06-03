@@ -54,7 +54,7 @@ function AuthenticatedLayout() {
 
 
   return (
-    <div className="flex h-screen bg-background">
+    <div className="flex h-screen bg-background print:block">
       <aside
         className="hidden w-60 shrink-0 p-4 md:flex md:flex-col md:sticky md:top-0 md:h-screen"
         style={{ backgroundColor: "#0a2a5e", color: "#ffffff" }}
@@ -107,10 +107,10 @@ function AuthenticatedLayout() {
       </aside>
       <main className="flex-1 overflow-y-auto">
         <div
-          className="hidden print:flex items-center justify-center px-6 py-2 mb-2"
+          className="hidden print:flex items-center justify-center px-6 py-1"
           style={{ backgroundColor: "#0a2a5e", color: "#ffffff" }}
         >
-          <h1 className="text-lg font-semibold tracking-wide">{currentLabel}</h1>
+          <h1 className="text-base font-semibold tracking-wide">{currentLabel}</h1>
         </div>
         <div className="p-6 md:p-10 print:p-0 print-fit">
           <Outlet />
