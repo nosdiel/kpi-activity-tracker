@@ -106,13 +106,7 @@ function AuthenticatedLayout() {
         </div>
       </aside>
       <main className="flex-1 overflow-y-auto">
-        <div
-          className="hidden print:flex items-center justify-center px-6 py-1"
-          style={{ backgroundColor: "#0a2a5e", color: "#ffffff" }}
-        >
-          <h1 className="text-base font-semibold tracking-wide">{currentLabel}</h1>
-        </div>
-        <div className="p-6 md:p-10 print:p-0 print-fit">
+        <div className="p-6 md:p-10 print:p-2 print-fit">
           <Outlet />
         </div>
       </main>
