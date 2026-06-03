@@ -14,8 +14,7 @@ import {
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/targets", label: "Targets", icon: Target },
-  { to: "/pnl", label: "P&L Weekly", icon: FileBarChart },
-  { to: "/pnl-qtr", label: "P&L Quarterly", icon: FileBarChart },
+  { to: "/pnl", label: "P&L", icon: FileBarChart },
   { to: "/pnl-bonus", label: "Bonus Calculator", icon: Calculator },
   { to: "/who-to-call", label: "Who to Call", icon: PhoneCall },
 ] as const;
