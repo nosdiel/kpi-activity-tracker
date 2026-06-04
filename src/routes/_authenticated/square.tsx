@@ -270,9 +270,31 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
 
       {(logsQ.data ?? []).length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle>Sync errors</CardTitle>
-            <CardDescription>Last 20 failed syncs.</CardDescription>
+          <CardHeader className="flex flex-row items-center justify-between">
+            <div>
+              <CardTitle>Sync errors</CardTitle>
+              <CardDescription>Last 20 failed syncs.</CardDescription>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                supabase
+                  .from("pos_sync_log")
+                  .delete()
+                  .eq("source", source)
+                  .eq("status", "error")
+                  .then(({ error }) => {
+                    if (error) toast.error(error.message);
+                    else {
+                      toast.success("Errors cleared");
+                      qc.invalidateQueries({ queryKey: ["pos_sync_log"] });
+                    }
+                  });
+              }}
+            >
+              Clear errors
+            </Button>
           </CardHeader>
           <CardContent>
             <Table>
