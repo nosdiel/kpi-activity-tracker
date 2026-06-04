@@ -426,9 +426,10 @@ export const syncToast = createServerFn({ method: "POST" })
       try {
         const base = ((loc as any).toast_api_url || TOAST_BASE).replace(/\/+$/, "");
         const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
-        const total = await toastDayTotalWithBase(base, token, loc.toast_restaurant_guid, businessDate);
-        r.total_cents = total;
-        await upsertDailySales(supabaseAdmin, loc.id, businessDate, total, "toast");
+        const { totalCents, customerCount } = await toastDayTotalWithBase(base, token, loc.toast_restaurant_guid, businessDate);
+        r.total_cents = totalCents;
+        r.customer_count = customerCount;
+        await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, "toast", customerCount);
       } catch (e) {
         r.status = "error";
         r.message = (e as Error).message;
