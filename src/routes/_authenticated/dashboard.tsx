@@ -247,8 +247,12 @@ function DashboardPage() {
     const s = byDate.get(d);
     const lyRow = lyByDate.get(lyDates[i]);
     // Prefer actual sales from same weekday last year; fall back to stored last_year_sales.
-    const ly = lyRow ? actualSalesValue(lyRow) : Number(s?.last_year_sales ?? 0);
-    const lyCust = Number(lyRow?.actual_customer_count ?? s?.last_year_customer_count ?? 0);
+    const lyRowSales = lyRow ? actualSalesValue(lyRow) : 0;
+    const storedLySales = Number(s?.last_year_sales ?? 0);
+    const ly = lyRowSales > 0 ? lyRowSales : storedLySales;
+    const lyRowCust = Number(lyRow?.actual_customer_count ?? 0);
+    const storedLyCust = Number(s?.last_year_customer_count ?? 0);
+    const lyCust = lyRowCust > 0 ? lyRowCust : storedLyCust;
     const actual = actualSalesValue(s);
     const cust = Number(s?.actual_customer_count ?? 0);
     const target = ly * (1 + targetPct);

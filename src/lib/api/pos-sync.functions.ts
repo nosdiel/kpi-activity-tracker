@@ -54,6 +54,19 @@ async function upsertDailySales(
     { onConflict: "location_id,business_date" }
   );
   if (error) throw new Error(`daily_sales upsert: ${error.message}`);
+
+  const nextYearDate = isoShiftDays(business_date, 364);
+  const { error: lyError } = await supabaseAdmin.from("daily_sales").upsert(
+    {
+      location_id,
+      business_date: nextYearDate,
+      last_year_sales: actual_sales,
+      last_year_customer_count: customer_count,
+      source,
+    },
+    { onConflict: "location_id,business_date" }
+  );
+  if (lyError) throw new Error(`daily_sales LY upsert: ${lyError.message}`);
 }
 
 
@@ -249,6 +262,7 @@ type ToastMetricsRow = {
   grossSalesAmount?: number;
   guestCount?: number;
   ordersCount?: number;
+  closedOrderCount?: number;
   closedOrdersCount?: number;
 };
 
@@ -257,23 +271,26 @@ function compactBusinessDate(iso: string) {
 }
 
 function isoFromToastBusinessDate(value: string | number | undefined) {
-  const compact = String(value ?? "");
+  const raw = String(value ?? "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const compact = raw.replace(/\D/g, "");
   return /^\d{8}$/.test(compact) ? `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}` : "";
 }
 
-async function fetchToastMetricsRows(
+async function createToastMetricsReport(
   base: string,
   accessToken: string,
   restaurantGuid: string,
   startDate: string,
-  endDate: string
-): Promise<ToastMetricsRow[]> {
+  endDate: string,
+  timeRange: "week" | "month" | "year"
+): Promise<string> {
   const startCompact = compactBusinessDate(startDate);
   const endCompact = compactBusinessDate(endDate);
   let createRes: Response | null = null;
   let attempt = 0;
   for (;;) {
-    createRes = await fetch(`${base}/era/v1/metrics/year`, {
+    createRes = await fetch(`${base}/era/v1/metrics/${timeRange}`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -294,7 +311,7 @@ async function fetchToastMetricsRows(
     attempt += 1;
   }
   if (!createRes!.ok) {
-    throw new Error(`Toast analytics create ${createRes!.status}: ${(await createRes!.text()).slice(0, 240)}`);
+    throw new Error(`Toast analytics create ${timeRange} ${createRes!.status}: ${(await createRes!.text()).slice(0, 240)}`);
   }
   const createdRaw = await createRes.text();
   let reportRequestGuid = "";
@@ -305,7 +322,14 @@ async function fetchToastMetricsRows(
     reportRequestGuid = createdRaw.replace(/^"|"$/g, "");
   }
   if (!reportRequestGuid) throw new Error(`Toast analytics: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
+  return reportRequestGuid;
+}
 
+async function fetchToastMetricsReport(
+  base: string,
+  accessToken: string,
+  reportRequestGuid: string
+): Promise<ToastMetricsRow[]> {
   const deadline = Date.now() + 90_000;
   let lastStatus = 0;
   let lastBody = "";
@@ -327,6 +351,18 @@ async function fetchToastMetricsRows(
   throw new Error(`Toast analytics: report not ready in time (last status ${lastStatus}${lastBody ? `: ${lastBody}` : ""})`);
 }
 
+async function fetchToastMetricsRows(
+  base: string,
+  accessToken: string,
+  restaurantGuid: string,
+  startDate: string,
+  endDate: string,
+  timeRange: "week" | "month" | "year" = "week"
+): Promise<ToastMetricsRow[]> {
+  const reportRequestGuid = await createToastMetricsReport(base, accessToken, restaurantGuid, startDate, endDate, timeRange);
+  return fetchToastMetricsReport(base, accessToken, reportRequestGuid);
+}
+
 function toastTotalsFromRows(rows: ToastMetricsRow[]) {
   let totalCents = 0;
   let customerCount = 0;
@@ -334,7 +370,7 @@ function toastTotalsFromRows(rows: ToastMetricsRow[]) {
     const amount = Number(row?.netSalesAmount ?? row?.grossSalesAmount ?? 0);
     if (Number.isFinite(amount)) totalCents += Math.round(amount * 100);
     const guestCount = Number(row?.guestCount ?? 0);
-    const orderCount = Number(row?.ordersCount ?? row?.closedOrdersCount ?? 0);
+    const orderCount = Number(row?.ordersCount ?? row?.closedOrderCount ?? row?.closedOrdersCount ?? 0);
     const guests = guestCount > 0 ? guestCount : orderCount;
     if (Number.isFinite(guests)) customerCount += Math.round(guests);
   }
@@ -715,12 +751,14 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         const neededSet = new Set(neededDates);
         for (const chunk of chunkDatesByMaxSpan(neededDates)) {
           try {
+            const timeRange = chunk.length <= 7 ? "week" : chunk.length <= 31 ? "month" : "year";
             const rows = await fetchToastMetricsRows(
               toastBase,
               toastToken!,
               loc.toast_restaurant_guid,
               chunk[0],
-              chunk[chunk.length - 1]
+              chunk[chunk.length - 1],
+              timeRange
             );
             const rowsByDate = new Map<string, ToastMetricsRow[]>();
             for (const row of rows) {
@@ -728,7 +766,8 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
               if (!businessDate || !neededSet.has(businessDate)) continue;
               rowsByDate.set(businessDate, [...(rowsByDate.get(businessDate) ?? []), row]);
             }
-            for (const [businessDate, dayRows] of rowsByDate) {
+            for (const businessDate of chunk) {
+              const dayRows = rowsByDate.get(businessDate) ?? [];
               const { totalCents, customerCount } = toastTotalsFromRows(dayRows);
               await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, source, customerCount);
               inserted += 1;
