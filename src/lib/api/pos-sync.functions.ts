@@ -859,58 +859,97 @@ async function fetchSquareMenuItems(accessToken: string): Promise<MenuItem[]> {
   return items;
 }
 
+// Uses Toast Analytics API Menu Reporting (scope: enterprise-metrics:read).
+// Does NOT require Menus API or Configuration API scopes.
 async function fetchToastMenuItems(
   base: string,
   accessToken: string,
   restaurantGuid: string
 ): Promise<MenuItem[]> {
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    "Toast-Restaurant-External-ID": restaurantGuid,
-  };
+  // Look back ~60 days so we get all items sold recently.
+  const end = new Date();
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() - 60);
+  const toCompact = (d: Date) =>
+    Number(
+      `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
+    );
 
-  // Try Menus API first; fall back to Configuration API if not permitted.
-  const tryEndpoints = [
-    { url: `${base}/menus/v2/menus`, kind: "menus" as const },
-    { url: `${base}/config/v2/menuItems`, kind: "config" as const },
-  ];
-
-  let lastErr = "";
-  for (const ep of tryEndpoints) {
-    const res = await fetch(ep.url, { headers });
-    if (!res.ok) {
-      lastErr = `Toast ${ep.kind} ${res.status}: ${(await res.text()).slice(0, 200)}`;
-      if (res.status === 401 || res.status === 403 || res.status === 404) continue;
-      throw new Error(lastErr);
-    }
-    const json: any = await res.json();
-    const out: MenuItem[] = [];
-    const seen = new Set<string>();
-    const push = (id?: string, name?: string, cat?: string) => {
-      const n = name?.trim();
-      if (!n || !id || seen.has(id)) return;
-      seen.add(id);
-      out.push({ id, name: n, category: cat ?? null });
-    };
-    if (ep.kind === "menus") {
-      for (const menu of json.menus ?? []) {
-        for (const g of menu.menuGroups ?? []) {
-          for (const it of g.menuItems ?? []) push(it.guid, it.name, g.name ?? menu.name);
-          for (const sg of g.menuGroups ?? []) {
-            for (const it of sg.menuItems ?? []) push(it.guid, it.name, sg.name ?? g.name);
-          }
-        }
-      }
-    } else {
-      const arr = Array.isArray(json) ? json : (json.menuItems ?? []);
-      for (const it of arr) push(it.guid, it.name, undefined);
-    }
-    if (out.length > 0) {
-      out.sort((a, b) => a.name.localeCompare(b.name));
-      return out;
-    }
+  // Create the menu report request.
+  let createRes: Response | null = null;
+  let attempt = 0;
+  for (;;) {
+    createRes = await fetch(`${base}/era/v1/menu/day`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        startBusinessDate: toCompact(start),
+        endBusinessDate: toCompact(end),
+        restaurantIds: [restaurantGuid],
+        excludedRestaurantIds: [],
+        groupBy: ["MENU_ITEM"],
+      }),
+    });
+    if (createRes.status !== 429 || attempt >= 5) break;
+    const ra = Number(createRes.headers.get("retry-after"));
+    const waitMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(30_000, 2000 * 2 ** attempt);
+    await new Promise((r) => setTimeout(r, waitMs));
+    attempt += 1;
   }
-  throw new Error(lastErr || "Toast menus: no items returned");
+  if (!createRes!.ok) {
+    throw new Error(`Toast menu report create ${createRes!.status}: ${(await createRes!.text()).slice(0, 240)}`);
+  }
+  const createdRaw = await createRes.text();
+  let reportRequestGuid = "";
+  try {
+    const parsed = JSON.parse(createdRaw);
+    reportRequestGuid = typeof parsed === "string" ? parsed : (parsed?.reportRequestGuid ?? "");
+  } catch {
+    reportRequestGuid = createdRaw.replace(/^"|"$/g, "");
+  }
+  if (!reportRequestGuid) {
+    throw new Error(`Toast menu report: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
+  }
+
+  // Poll for the report result.
+  const deadline = Date.now() + 90_000;
+  let rows: any[] | null = null;
+  let lastStatus = 0;
+  let lastBody = "";
+  while (Date.now() < deadline) {
+    const getRes = await fetch(`${base}/era/v1/menu/${reportRequestGuid}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    lastStatus = getRes.status;
+    if (getRes.status === 200) {
+      const body = await getRes.json();
+      if (Array.isArray(body)) { rows = body; break; }
+      if (Array.isArray((body as any)?.data)) { rows = (body as any).data; break; }
+    } else if (getRes.status === 202 || getRes.status === 204) {
+      lastBody = (await getRes.text()).slice(0, 200);
+    } else {
+      throw new Error(`Toast menu report get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`);
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  if (!rows) {
+    throw new Error(`Toast menu report: not ready in time (last status ${lastStatus}${lastBody ? `: ${lastBody}` : ""})`);
+  }
+
+  const out: MenuItem[] = [];
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
+    const name = String(row?.menuItemName ?? "").trim();
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name, category: row?.menuGroupName ?? row?.salesCategory ?? null });
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
 }
 
 export const listPosMenuItems = createServerFn({ method: "POST" })
