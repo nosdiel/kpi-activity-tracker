@@ -304,8 +304,7 @@ async function toastDayTotalWithBase(
         netSalesAmount?: number;
         grossSalesAmount?: number;
         guestCount?: number;
-        checkCount?: number;
-        orderCount?: number;
+        ordersCount?: number;
       }>
     | null = null;
   let lastStatus = 0;
