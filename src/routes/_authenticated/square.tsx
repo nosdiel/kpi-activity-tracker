@@ -53,6 +53,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   const updateCreds = useServerFn(updateLocationPosCredentials);
   const statusFn = useServerFn(getLocationsPosStatus);
   const backfillFn = useServerFn(backfillActualSales);
+  const backfillRangeFn = useServerFn(backfillSalesRange);
   const [date, setDate] = useState("");
   const [editing, setEditing] = useState<LocStatus | null>(null);
   const [form, setForm] = useState({
