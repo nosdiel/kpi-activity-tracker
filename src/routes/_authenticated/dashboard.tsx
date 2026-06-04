@@ -60,7 +60,15 @@ const withFY2027 = (rows: FY[] = []) => {
 };
 const defaultFiscalYear = (rows: FY[]) => {
   const today = new Date().toISOString().slice(0, 10);
-  return rows.find((r) => r.start_date <= today) ?? rows[0];
+  // Pick the FY whose 52-week window contains today (start <= today < start+364).
+  const containing = rows.find((r) => {
+    const end = new Date(`${r.start_date}T00:00:00Z`);
+    end.setUTCDate(end.getUTCDate() + 7 * 52);
+    return r.start_date <= today && today < end.toISOString().slice(0, 10);
+  });
+  if (containing) return containing;
+  // Otherwise fall back to the most recent FY that has already started.
+  return rows.find((r) => r.start_date <= today) ?? rows[rows.length - 1] ?? rows[0];
 };
 
 function DashboardPage() {
