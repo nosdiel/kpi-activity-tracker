@@ -324,21 +324,21 @@ function WeeklyPnlPage() {
             <Select value={fy?.toString() ?? ""} onValueChange={(v) => setFy(Number(v))}>
               <SelectTrigger><SelectValue placeholder="FY" /></SelectTrigger>
               <SelectContent>
-                {(fyQ.data ?? []).map((y) => (
+                {fiscalYears.map((y) => (
                   <SelectItem key={y.fiscal_year} value={String(y.fiscal_year)}>FY {y.fiscal_year}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Fiscal Period">
-            <Select value={String(period)} onValueChange={(v) => setWeek(periodWeekRange(Number(v)).start)}>
+          <Field label="Fiscal Quarter">
+            <Select value={String(quarter)} onValueChange={(v) => setWeek(quarterWeekRange(Number(v)).start)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Array.from({ length: 13 }, (_, i) => i + 1).map((p) => {
-                  const r = periodWeekRange(p);
+                {Array.from({ length: 4 }, (_, i) => i + 1).map((q) => {
+                  const r = quarterWeekRange(q);
                   return (
-                    <SelectItem key={p} value={String(p)}>
-                      P{p} (Q{quarterForPeriod(p)}, wk {r.start}–{r.end})
+                    <SelectItem key={q} value={String(q)}>
+                      Q{q} (Weeks {r.start}–{r.end})
                     </SelectItem>
                   );
                 })}
@@ -349,7 +349,7 @@ function WeeklyPnlPage() {
             <Select value={week?.toString() ?? ""} onValueChange={(v) => setWeek(Number(v))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Array.from({ length: periodRange.end - periodRange.start + 1 }, (_, i) => periodRange.start + i).map((w) => {
+                {Array.from({ length: quarterRange.end - quarterRange.start + 1 }, (_, i) => quarterRange.start + i).map((w) => {
                   const wd = fyRow ? weekDates(fyRow.start_date, w) : [];
                   const fmt = (iso: string) => {
                     const d = new Date(`${iso}T00:00:00Z`);
