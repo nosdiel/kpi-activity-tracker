@@ -3,7 +3,11 @@ import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { listPosMenuItems } from "@/lib/api/pos-sync.functions";
+import {
+  listPosMenuItems,
+  startToastMenuReportJob,
+  pollToastMenuReportJob,
+} from "@/lib/api/pos-sync.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -95,15 +99,101 @@ function TrackableItemsPage() {
   }, [locationsQ.data]);
 
   const listMenuItems = useServerFn(listPosMenuItems);
+  const startJob = useServerFn(startToastMenuReportJob);
+  const pollJob = useServerFn(pollToastMenuReportJob);
   const [posOpen, setPosOpen] = useState(false);
+  const [pollJobId, setPollJobId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Initial / cached lookup. Never blocks on Toast.
   const menuQ = useQuery({
     queryKey: ["pos-menu-items", form.location_id],
-    queryFn: () => listMenuItems({ data: { location_id: form.location_id } }),
+    queryFn: async () => {
+      const r = await listMenuItems({ data: { location_id: form.location_id } });
+      if (r.provider === "toast" && r.job_id && r.status === "pending") {
+        setPollJobId(r.job_id);
+      }
+      return r;
+    },
     enabled: false,
     retry: false,
     staleTime: 5 * 60_000,
   });
+
+  // Poll loop while a Toast report is pending.
+  const pollQ = useQuery({
+    queryKey: ["pos-menu-items-poll", pollJobId],
+    queryFn: async () => {
+      if (!pollJobId) return null;
+      const r = await pollJob({ data: { job_id: pollJobId } });
+      if (r.status === "ready" || r.status === "failed" || r.status === "rate_limited") {
+        setPollJobId(null);
+        setSyncing(false);
+        if (r.status === "failed") setSyncError(r.error ?? "Report failed");
+        if (r.status === "rate_limited") setSyncError(r.error ?? "Toast rate limit reached, try again later.");
+        // refresh menuQ cache with the latest
+        qc.setQueryData(["pos-menu-items", form.location_id], (prev: any) => ({
+          ...(prev ?? {}),
+          provider: "toast",
+          items: r.items,
+          status: r.status,
+          error: r.error ?? null,
+          job_id: pollJobId,
+        }));
+      }
+      return r;
+    },
+    enabled: !!pollJobId,
+    refetchInterval: pollJobId ? 5_000 : false,
+    retry: false,
+  });
+  void pollQ;
+
   const menuItems = menuQ.data?.items ?? [];
+  const isPending = syncing || !!pollJobId || menuQ.data?.status === "pending";
+
+  const handleSync = async () => {
+    if (!form.location_id || syncing) return;
+    setSyncError(null);
+    setSyncing(true);
+    try {
+      // Try cache first
+      const cached = await listMenuItems({ data: { location_id: form.location_id } });
+      qc.setQueryData(["pos-menu-items", form.location_id], cached);
+      if (cached.provider !== "toast") {
+        // Square path is sync; we're done.
+        setSyncing(false);
+        return;
+      }
+      if (cached.status === "ready" && cached.items.length > 0) {
+        setSyncing(false);
+        return;
+      }
+      if (cached.status === "pending" && cached.job_id) {
+        setPollJobId(cached.job_id);
+        return;
+      }
+      // Start a new (or reuse) job
+      const started = await startJob({ data: { location_id: form.location_id } });
+      if (!started.ok) {
+        setSyncError(started.error);
+        setSyncing(false);
+        toast.error(started.error);
+        return;
+      }
+      if (started.status === "ready") {
+        await menuQ.refetch();
+        setSyncing(false);
+        return;
+      }
+      setPollJobId(started.job_id);
+    } catch (e) {
+      setSyncError((e as Error).message);
+      setSyncing(false);
+      toast.error((e as Error).message);
+    }
+  };
 
 
   const saveMut = useMutation({
@@ -268,11 +358,11 @@ function TrackableItemsPage() {
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2 text-xs"
-                    onClick={() => menuQ.refetch()}
-                    disabled={menuQ.isFetching}
+                    onClick={handleSync}
+                    disabled={isPending}
                   >
-                    <RefreshCw className={cn("h-3 w-3 mr-1", menuQ.isFetching && "animate-spin")} />
-                    Refresh menu
+                    <RefreshCw className={cn("h-3 w-3 mr-1", isPending && "animate-spin")} />
+                    {isPending ? "Syncing…" : "Refresh menu"}
                   </Button>
                 )}
               </div>
@@ -286,11 +376,11 @@ function TrackableItemsPage() {
                       variant="outline"
                       role="combobox"
                       className="w-full justify-between font-normal"
-                      disabled={menuQ.isFetching && menuItems.length === 0}
+                      disabled={isPending && menuItems.length === 0}
                     >
                       <span className="truncate">
-                        {menuQ.isFetching && menuItems.length === 0
-                          ? "Loading menu items..."
+                        {isPending && menuItems.length === 0
+                          ? "Report requested — still processing…"
                           : form.pos_product || (menuQ.data || menuQ.error ? "Select a POS menu item..." : "Refresh menu to load POS items...")}
                       </span>
                       <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
@@ -301,10 +391,14 @@ function TrackableItemsPage() {
                       <CommandInput placeholder="Search menu items..." />
                       <CommandList>
                         <CommandEmpty>
-                          {menuQ.error
+                          {syncError
+                            ? `Error: ${syncError}`
+                            : menuQ.error
                             ? `Error: ${(menuQ.error as Error).message}`
                             : menuQ.data?.error
                             ? `Error: ${menuQ.data.error}`
+                            : isPending
+                            ? "Still processing, check again in a few seconds."
                             : !menuQ.data
                             ? "Click Refresh menu to load POS items."
                             : menuItems.length === 0
