@@ -906,7 +906,7 @@ async function fetchToastMenuItemsForDay(
     throw new Error(`Toast menu report: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
   }
 
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     const getRes = await fetch(`${base}/era/v1/menu/${reportRequestGuid}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -920,7 +920,7 @@ async function fetchToastMenuItemsForDay(
     if (getRes.status !== 202 && getRes.status !== 204) {
       throw new Error(`Toast menu report get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`);
     }
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 600));
   }
   throw new Error("Toast menu report: not ready in time");
 }
