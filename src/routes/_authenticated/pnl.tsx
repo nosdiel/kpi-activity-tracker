@@ -61,6 +61,10 @@ const withFY2027 = (rows: FY[] = []) => {
   const start_date = fy2026 ? shiftISODate(fy2026.start_date, 364) : "2026-12-27";
   return [{ fiscal_year: 2027, start_date }, ...rows].sort((a, b) => b.fiscal_year - a.fiscal_year);
 };
+const defaultFiscalYear = (rows: FY[]) => {
+  const today = new Date().toISOString().slice(0, 10);
+  return rows.find((r) => r.start_date <= today) ?? rows[0];
+};
 
 // Merge stored vendor list with defaults so defaults always appear (unless explicitly removed).
 function buildSectionLines(
@@ -136,8 +140,9 @@ function WeeklyPnlPage() {
   useEffect(() => {
     const years = withFY2027(fyQ.data ?? []);
     if (fy === null && years[0]) {
-      setFy(years[0].fiscal_year);
-      const cur = currentFiscalWeek(years[0].start_date);
+      const latest = defaultFiscalYear(years);
+      setFy(latest.fiscal_year);
+      const cur = currentFiscalWeek(latest.start_date);
       setWeek(cur > 1 ? cur - 1 : cur);
     }
   }, [fyQ.data, fy]);
@@ -294,7 +299,7 @@ function WeeklyPnlPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Weekly P&L</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {locName} · FY{fy ?? "—"} · Period {period} · Week {week ?? "—"}
+            {locName} · FY{fy ?? "—"} · Q{quarter} · Week {week ?? "—"}
           </p>
         </div>
         <div className="flex gap-2" data-print-actions>
