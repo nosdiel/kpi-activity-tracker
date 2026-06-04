@@ -142,13 +142,14 @@ export const syncSquare = createServerFn({ method: "POST" })
         status: "ok",
       };
       try {
-        const total = await squareDayTotal(
+        const { totalCents, customerCount } = await squareDayTotal(
           loc.square_access_token,
           loc.square_location_id,
           businessDate
         );
-        r.total_cents = total;
-        await upsertDailySales(supabaseAdmin, loc.id, businessDate, total, "square");
+        r.total_cents = totalCents;
+        r.customer_count = customerCount;
+        await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, "square", customerCount);
       } catch (e) {
         r.status = "error";
         r.message = (e as Error).message;
