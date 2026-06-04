@@ -749,22 +749,11 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         processed += 1;
         if (have.has(`${loc.id}|${businessDate}`)) continue;
         try {
-          let totalCents = 0;
-          let customerCount = 0;
-          if (source === "square") {
-            ({ totalCents, customerCount } = await squareDayTotal(
-              loc.square_access_token,
-              loc.square_location_id,
-              businessDate
-            ));
-          } else {
-            ({ totalCents, customerCount } = await toastDayTotalWithBase(
-              toastBase,
-              toastToken!,
-              loc.toast_restaurant_guid,
-              businessDate
-            ));
-          }
+          const { totalCents, customerCount } = await squareDayTotal(
+            loc.square_access_token,
+            loc.square_location_id,
+            businessDate
+          );
           await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, source, customerCount);
           inserted += 1;
         } catch (e) {
@@ -774,9 +763,6 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
             message: (e as Error).message,
           });
         }
-        // Pace requests to stay under POS rate limits (Toast analytics ~5 req/sec).
-        if (source === "toast") await new Promise((r) => setTimeout(r, 350));
-
       }
     }
 
