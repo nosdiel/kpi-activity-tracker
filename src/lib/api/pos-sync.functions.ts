@@ -388,6 +388,14 @@ export const updateLocationPosCredentials = createServerFn({ method: "POST" })
       .from("locations")
       .update(patch)
       .eq("id", data.location_id);
+    if (error && isMissingToastMetadataColumn(error)) {
+      const { toast_credential_name, toast_api_url, ...fallbackPatch } = patch;
+      void toast_credential_name;
+      void toast_api_url;
+      const fallback = await supabaseAdmin.from("locations").update(fallbackPatch).eq("id", data.location_id);
+      if (fallback.error) throw new Error(fallback.error.message);
+      return { ok: true };
+    }
     if (error) throw new Error(error.message);
     return { ok: true };
   });
