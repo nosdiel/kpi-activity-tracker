@@ -17,12 +17,16 @@ export function periodForWeek(week: number): number {
 }
 
 export function quarterForPeriod(period: number): number {
-  // 13 periods don't divide evenly into 4 quarters; group ~3-3-3-4.
-  if (period <= 3) return 1;
-  if (period <= 6) return 2;
-  if (period <= 9) return 3;
-  return 4;
+  // 4 quarters × 13 weeks. Assign each period to the quarter holding its first week.
+  const { start } = periodWeekRange(period);
+  return Math.min(4, Math.floor((start - 1) / 13) + 1);
 }
+
+export function quarterWeekRange(quarter: number): { start: number; end: number } {
+  const start = (quarter - 1) * 13 + 1;
+  return { start, end: start + 12 };
+}
+
 
 
 /** Snap to the Sunday on or before the given UTC date. */
