@@ -99,15 +99,101 @@ function TrackableItemsPage() {
   }, [locationsQ.data]);
 
   const listMenuItems = useServerFn(listPosMenuItems);
+  const startJob = useServerFn(startToastMenuReportJob);
+  const pollJob = useServerFn(pollToastMenuReportJob);
   const [posOpen, setPosOpen] = useState(false);
+  const [pollJobId, setPollJobId] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Initial / cached lookup. Never blocks on Toast.
   const menuQ = useQuery({
     queryKey: ["pos-menu-items", form.location_id],
-    queryFn: () => listMenuItems({ data: { location_id: form.location_id } }),
+    queryFn: async () => {
+      const r = await listMenuItems({ data: { location_id: form.location_id } });
+      if (r.provider === "toast" && r.job_id && r.status === "pending") {
+        setPollJobId(r.job_id);
+      }
+      return r;
+    },
     enabled: false,
     retry: false,
     staleTime: 5 * 60_000,
   });
+
+  // Poll loop while a Toast report is pending.
+  const pollQ = useQuery({
+    queryKey: ["pos-menu-items-poll", pollJobId],
+    queryFn: async () => {
+      if (!pollJobId) return null;
+      const r = await pollJob({ data: { job_id: pollJobId } });
+      if (r.status === "ready" || r.status === "failed" || r.status === "rate_limited") {
+        setPollJobId(null);
+        setSyncing(false);
+        if (r.status === "failed") setSyncError(r.error ?? "Report failed");
+        if (r.status === "rate_limited") setSyncError(r.error ?? "Toast rate limit reached, try again later.");
+        // refresh menuQ cache with the latest
+        qc.setQueryData(["pos-menu-items", form.location_id], (prev: any) => ({
+          ...(prev ?? {}),
+          provider: "toast",
+          items: r.items,
+          status: r.status,
+          error: r.error ?? null,
+          job_id: pollJobId,
+        }));
+      }
+      return r;
+    },
+    enabled: !!pollJobId,
+    refetchInterval: pollJobId ? 5_000 : false,
+    retry: false,
+  });
+  void pollQ;
+
   const menuItems = menuQ.data?.items ?? [];
+  const isPending = syncing || !!pollJobId || menuQ.data?.status === "pending";
+
+  const handleSync = async () => {
+    if (!form.location_id || syncing) return;
+    setSyncError(null);
+    setSyncing(true);
+    try {
+      // Try cache first
+      const cached = await listMenuItems({ data: { location_id: form.location_id } });
+      qc.setQueryData(["pos-menu-items", form.location_id], cached);
+      if (cached.provider !== "toast") {
+        // Square path is sync; we're done.
+        setSyncing(false);
+        return;
+      }
+      if (cached.status === "ready" && cached.items.length > 0) {
+        setSyncing(false);
+        return;
+      }
+      if (cached.status === "pending" && cached.job_id) {
+        setPollJobId(cached.job_id);
+        return;
+      }
+      // Start a new (or reuse) job
+      const started = await startJob({ data: { location_id: form.location_id } });
+      if (!started.ok) {
+        setSyncError(started.error);
+        setSyncing(false);
+        toast.error(started.error);
+        return;
+      }
+      if (started.status === "ready") {
+        await menuQ.refetch();
+        setSyncing(false);
+        return;
+      }
+      setPollJobId(started.job_id);
+    } catch (e) {
+      setSyncError((e as Error).message);
+      setSyncing(false);
+      toast.error((e as Error).message);
+    }
+  };
 
 
   const saveMut = useMutation({
