@@ -564,6 +564,17 @@ function isoShiftDays(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function currentWeekDatesLastYear(): string[] {
+  const today = new Date();
+  const weekStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  weekStart.setUTCDate(weekStart.getUTCDate() - weekStart.getUTCDay());
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(weekStart);
+    d.setUTCDate(d.getUTCDate() + i - 364);
+    return d.toISOString().slice(0, 10);
+  });
+}
+
 // Pull historical daily sales from POS for the last N days (default 365).
 // Skips days that already have actual_sales and actual_customer_count populated so repeat runs are cheap.
 export const backfillSalesRange = createServerFn({ method: "POST" })
@@ -576,6 +587,7 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         include_last_year: z.boolean().optional(),
+        include_current_week_last_year: z.boolean().optional(),
         location_id: z.string().uuid().optional(),
       })
       .parse(input)
@@ -601,7 +613,10 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
     if (data.include_last_year) {
       dateList = Array.from(new Set([...dateList, ...dateList.map((d) => isoShiftDays(d, -364))]));
     }
-    if (dateList.length > 730) throw new Error("Date range too large (max 730 total days, including LY dates)");
+    if (data.include_current_week_last_year) {
+      dateList = Array.from(new Set([...dateList, ...currentWeekDatesLastYear()]));
+    }
+    if (dateList.length > 760) throw new Error("Date range too large (max 760 total days, including LY dates)");
     const days = dateList.length;
 
     let locs: any[] = [];
