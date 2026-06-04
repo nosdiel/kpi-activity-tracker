@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getTrackableItemDailyQuantity } from "@/lib/api/pos-sync.functions";
+import { getTrackableItemDailyQuantity, syncToast, syncSquare } from "@/lib/api/pos-sync.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -215,6 +215,34 @@ function DashboardPage() {
   });
 
   const targetPct = Number(targetQ.data?.target_pct_over_ly ?? 0) / 100;
+
+  // Auto-sync POS sales (Toast + Square) every 6 hours for the visible week.
+  const runToastSync = useServerFn(syncToast);
+  const runSquareSync = useServerFn(syncSquare);
+  useEffect(() => {
+    if (!locationId || dates.length !== 7) return;
+    let cancelled = false;
+    const todayISO = new Date().toISOString().slice(0, 10);
+    const syncDates = dates.filter((d) => d <= todayISO);
+    const sync = async () => {
+      for (const d of syncDates) {
+        if (cancelled) return;
+        await Promise.allSettled([
+          runToastSync({ data: { location_id: locationId, business_date: d } }),
+          runSquareSync({ data: { location_id: locationId, business_date: d } }),
+        ]);
+      }
+      if (!cancelled) {
+        salesQ.refetch();
+        focusDailyQ.refetch();
+      }
+    };
+    sync();
+    const id = setInterval(sync, SIX_HOURS);
+    return () => { cancelled = true; clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationId, dates[0], dates[6]]);
+
 
   const byDate = useMemo(() => {
     const m = new Map<string, DailySale>();
