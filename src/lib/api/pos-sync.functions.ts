@@ -295,6 +295,17 @@ async function selectToastLocations(supabaseAdmin: any, locationId?: string) {
   return buildQuery(toastBaseLocationColumns);
 }
 
+async function selectLocationsPosStatus(supabaseAdmin: any) {
+  const baseColumns =
+    "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret";
+  const extendedColumns = `${baseColumns},toast_credential_name,toast_api_url`;
+
+  const extended = await supabaseAdmin.from("locations").select(extendedColumns).order("name");
+  if (!extended.error || !isMissingToastMetadataColumn(extended.error)) return extended;
+
+  return supabaseAdmin.from("locations").select(baseColumns).order("name");
+}
+
 export const syncToast = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -386,12 +397,7 @@ export const getLocationsPosStatus = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data, error } = await supabaseAdmin
-      .from("locations")
-      .select(
-        "id,name,pos_provider,square_location_id,square_access_token,toast_credential_name,toast_api_url,toast_restaurant_guid,toast_client_id,toast_client_secret"
-      )
-      .order("name");
+    const { data, error } = await selectLocationsPosStatus(supabaseAdmin);
     if (error) throw new Error(error.message);
     return (data ?? []).map((l: any) => ({
       id: l.id,
