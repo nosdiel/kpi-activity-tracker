@@ -423,9 +423,9 @@ function DashboardPage() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-3 report-stat-grid">
-        <Stat label="Sales Target" value={money(totals.target)} variance={totals.varSales} varianceLabel={money(totals.varSales)} pct={totals.target > 0 ? totals.varSales / totals.target : 0} />
-        <Stat label="LY Avg" value={money(lyAvgTotal)} variance={avgVariance} varianceLabel={money(avgVariance)} pct={lyAvgTotal > 0 ? avgVariance / lyAvgTotal : 0} />
-        <Stat label="LY Cust" value={num(totals.lyCust)} variance={totals.varCust} varianceLabel={num(totals.varCust)} pct={totals.lyCust > 0 ? totals.varCust / totals.lyCust : 0} />
+        <Stat label="Sales Target (WTD)" value={money(wtd.target)} variance={wtd.varSales} varianceLabel={money(wtd.varSales)} pct={wtd.target > 0 ? wtd.varSales / wtd.target : 0} />
+        <Stat label="LY Avg (WTD)" value={money(wtdLyAvg)} variance={wtdAvgVariance} varianceLabel={money(wtdAvgVariance)} pct={wtdLyAvg > 0 ? wtdAvgVariance / wtdLyAvg : 0} />
+        <Stat label="LY Cust (WTD)" value={num(wtd.lyCust)} variance={wtd.varCust} varianceLabel={num(wtd.varCust)} pct={wtd.lyCust > 0 ? wtd.varCust / wtd.lyCust : 0} />
       </div>
 
       {salesQ.error && <p className="text-sm text-destructive">{(salesQ.error as Error).message}</p>}
