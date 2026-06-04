@@ -246,7 +246,7 @@ async function toastAccessTokenWithBase(
       clientSecret,
       userAccessType: "TOAST_MACHINE_CLIENT",
     }),
-  }, 5_000);
+  }, 4_000);
   if (!res.ok) {
     throw new Error(`Toast auth ${res.status}: ${(await res.text()).slice(0, 240)}`);
   }
@@ -898,7 +898,7 @@ async function fetchToastMenuItemsForDay(
         excludedRestaurantIds: [],
         groupBy: ["MENU_ITEM"],
       }),
-    }, 8_000);
+    }, 5_000);
     if (createRes.status !== 429 || attempt >= 1) break;
     const ra = Number(createRes.headers.get("retry-after"));
     const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 2_000) : 1_000;
@@ -956,7 +956,7 @@ async function fetchToastMenuItems(
   const day = toCompact(d);
   const out: MenuItem[] = [];
   const seen = new Set<string>();
-  const rows = await fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, day, 8_000);
+  const rows = await fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, day, 6_000);
   for (const row of rows) {
     const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
     const name = String(row?.menuItemName ?? "").trim();
