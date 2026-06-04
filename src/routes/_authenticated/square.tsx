@@ -249,7 +249,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                   toast.error("Pick both start and end dates");
                   return;
                 }
-                backfillRangeMut.mutate({ start_date: startDate, end_date: endDate, include_last_year: true });
+                backfillRangeMut.mutate({ start_date: startDate, end_date: endDate, include_last_year: true, include_current_week_last_year: true });
               }}
               disabled={backfillRangeMut.isPending}
             >
