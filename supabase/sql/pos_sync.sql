@@ -4,6 +4,8 @@ ALTER TABLE public.locations
   ADD COLUMN IF NOT EXISTS pos_provider text,           -- 'square' | 'toast' | null
   ADD COLUMN IF NOT EXISTS square_location_id text,
   ADD COLUMN IF NOT EXISTS square_access_token text,    -- secret, read via service role only
+  ADD COLUMN IF NOT EXISTS toast_credential_name text,
+  ADD COLUMN IF NOT EXISTS toast_api_url text,
   ADD COLUMN IF NOT EXISTS toast_restaurant_guid text,
   ADD COLUMN IF NOT EXISTS toast_client_id text,
   ADD COLUMN IF NOT EXISTS toast_client_secret text;    -- secret
