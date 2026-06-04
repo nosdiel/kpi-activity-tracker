@@ -1,6 +1,5 @@
-// NRF-style 4-4-5 fiscal calendar helpers
-// Pattern: each quarter = 4 + 4 + 5 weeks. 13 periods, 52 weeks/year.
-const PERIOD_WEEKS = [4, 4, 5, 4, 4, 5, 4, 4, 5, 4, 4, 5] as const;
+// 13-period fiscal calendar: every period = 4 weeks (13 × 4 = 52 weeks/year).
+const PERIOD_WEEKS = [4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4] as const;
 
 export function periodWeekRange(period: number): { start: number; end: number } {
   let start = 1;
@@ -14,12 +13,17 @@ export function periodForWeek(week: number): number {
     acc += PERIOD_WEEKS[i];
     if (week <= acc) return i + 1;
   }
-  return 13;
+  return PERIOD_WEEKS.length;
 }
 
 export function quarterForPeriod(period: number): number {
-  return Math.min(4, Math.ceil(period / 3));
+  // 13 periods don't divide evenly into 4 quarters; group ~3-3-3-4.
+  if (period <= 3) return 1;
+  if (period <= 6) return 2;
+  if (period <= 9) return 3;
+  return 4;
 }
+
 
 /** Snap to the Sunday on or before the given UTC date. */
 function snapToSunday(d: Date): Date {
