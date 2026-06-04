@@ -272,9 +272,11 @@ const toastBaseLocationColumns =
   "id,name,toast_restaurant_guid,toast_client_id,toast_client_secret";
 const toastExtendedLocationColumns = `${toastBaseLocationColumns},toast_api_url,toast_credential_name`;
 
-function isMissingToastMetadataColumn(error: { message?: string } | null | undefined) {
-  const message = error?.message ?? "";
-  return message.includes("toast_credential_name") || message.includes("toast_api_url");
+function isMissingToastMetadataColumn(error: { message?: string; code?: string; details?: string } | null | undefined) {
+  if (!error) return false;
+  const blob = `${error.message ?? ""} ${error.details ?? ""}`;
+  if (error.code === "42703" && (blob.includes("toast_credential_name") || blob.includes("toast_api_url"))) return true;
+  return blob.includes("toast_credential_name") || blob.includes("toast_api_url");
 }
 
 async function selectToastLocations(supabaseAdmin: any, locationId?: string) {
