@@ -78,8 +78,10 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
         .from("pos_sync_log")
         .select("*")
         .eq("source", source)
+        .eq("status", "error")
         .order("created_at", { ascending: false })
         .limit(20);
+
       if (error) throw error;
       return data ?? [];
     },
@@ -266,15 +268,13 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Recent sync activity</CardTitle>
-          <CardDescription>Last 20 runs.</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {(logsQ.data ?? []).length === 0 ? (
-            <p className="text-sm text-muted-foreground">No syncs yet.</p>
-          ) : (
+      {(logsQ.data ?? []).length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Sync errors</CardTitle>
+            <CardDescription>Last 20 failed syncs.</CardDescription>
+          </CardHeader>
+          <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -293,9 +293,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                     </TableCell>
                     <TableCell className="text-xs">{l.business_date}</TableCell>
                     <TableCell>
-                      <Badge variant={l.status === "ok" ? "default" : "destructive"}>
-                        {l.status}
-                      </Badge>
+                      <Badge variant="destructive">{l.status}</Badge>
                     </TableCell>
                     <TableCell className="text-right">
                       {l.total_cents != null ? `$${(l.total_cents / 100).toFixed(2)}` : "—"}
@@ -307,9 +305,10 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                 ))}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
+
 
       <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
         <DialogContent>
