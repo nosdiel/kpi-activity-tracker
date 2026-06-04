@@ -639,6 +639,9 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
             message: (e as Error).message,
           });
         }
+        // Pace requests to stay under POS rate limits (Toast analytics ~5 req/sec).
+        if (source === "toast") await new Promise((r) => setTimeout(r, 350));
+
       }
     }
 
