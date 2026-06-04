@@ -129,7 +129,8 @@ function WeeklyPnlPage() {
   useEffect(() => {
     if (fy === null && fyQ.data?.[0]) {
       setFy(fyQ.data[0].fiscal_year);
-      setWeek(currentFiscalWeek(fyQ.data[0].start_date));
+      const cur = currentFiscalWeek(fyQ.data[0].start_date);
+      setWeek(cur > 1 ? cur - 1 : cur);
     }
   }, [fyQ.data, fy]);
 
