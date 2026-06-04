@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { createUserWithRole, setUserRole, deleteUser } from "@/lib/api/users.functions";
+import { createUserWithRole, setUserRole, deleteUser, listUsers } from "@/lib/api/users.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,6 +40,7 @@ function UsersPage() {
   const createFn = useServerFn(createUserWithRole);
   const setRoleFn = useServerFn(setUserRole);
   const deleteFn = useServerFn(deleteUser);
+  const listFn = useServerFn(listUsers);
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -52,12 +53,10 @@ function UsersPage() {
 
   const profilesQ = useQuery({
     queryKey: ["profiles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*");
-      if (error) throw error;
-      return (data ?? []) as Array<Record<string, unknown>>;
-    },
+    queryFn: () => listFn(),
   });
+  void supabase;
+
 
   const rolesQ = useQuery({
     queryKey: ["user_roles"],
@@ -232,13 +231,11 @@ function UsersPage() {
               </TableHeader>
               <TableBody>
                 {(profilesQ.data ?? []).map((p) => {
-                  const uid = String(p.id ?? p.user_id ?? "");
+                  const uid = p.id;
                   const currentRole =
                     ((rolesQ.data ?? []).find((r) => r.user_id === uid)?.role as Role) ??
                     undefined;
-                  const label = String(
-                    p.email ?? p.display_name ?? p.full_name ?? uid.slice(0, 8)
-                  );
+                  const label = p.email || p.display_name || uid.slice(0, 8);
                   return (
                     <TableRow key={uid}>
                       <TableCell>{label}</TableCell>
