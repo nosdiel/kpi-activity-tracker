@@ -64,11 +64,12 @@ async function squareDayTotal(
   accessToken: string,
   locationId: string,
   businessDate: string
-): Promise<number> {
+): Promise<{ totalCents: number; customerCount: number }> {
   const start = `${businessDate}T00:00:00Z`;
   const end = `${businessDate}T23:59:59Z`;
   let cursor: string | undefined;
   let totalCents = 0;
+  let customerCount = 0;
 
   do {
     const res = await fetch(`${SQUARE_BASE}/v2/orders/search`, {
@@ -100,12 +101,14 @@ async function squareDayTotal(
     for (const o of json.orders ?? []) {
       const amt = o.net_amounts?.total_money?.amount ?? o.total_money?.amount ?? 0;
       totalCents += Number(amt);
+      customerCount += 1;
     }
     cursor = json.cursor;
   } while (cursor);
 
-  return totalCents;
+  return { totalCents, customerCount };
 }
+
 
 export const syncSquare = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
