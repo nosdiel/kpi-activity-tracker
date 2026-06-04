@@ -268,6 +268,33 @@ async function toastDayTotalWithBase(
 void toastAccessToken;
 void toastDayTotal;
 
+const toastBaseLocationColumns =
+  "id,name,toast_restaurant_guid,toast_client_id,toast_client_secret";
+const toastExtendedLocationColumns = `${toastBaseLocationColumns},toast_api_url,toast_credential_name`;
+
+function isMissingToastMetadataColumn(error: { message?: string } | null | undefined) {
+  const message = error?.message ?? "";
+  return message.includes("toast_credential_name") || message.includes("toast_api_url");
+}
+
+async function selectToastLocations(supabaseAdmin: any, locationId?: string) {
+  const buildQuery = (columns: string) => {
+    let query = supabaseAdmin
+      .from("locations")
+      .select(columns)
+      .not("toast_restaurant_guid", "is", null)
+      .not("toast_client_id", "is", null)
+      .not("toast_client_secret", "is", null);
+    if (locationId) query = query.eq("id", locationId);
+    return query;
+  };
+
+  const extended = await buildQuery(toastExtendedLocationColumns);
+  if (!extended.error || !isMissingToastMetadataColumn(extended.error)) return extended;
+
+  return buildQuery(toastBaseLocationColumns);
+}
+
 export const syncToast = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -282,14 +309,7 @@ export const syncToast = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const businessDate = data.business_date ?? yesterdayISO();
 
-    let q = supabaseAdmin
-      .from("locations")
-      .select("id,name,toast_restaurant_guid,toast_client_id,toast_client_secret,toast_api_url,toast_credential_name")
-      .not("toast_restaurant_guid", "is", null)
-      .not("toast_client_id", "is", null)
-      .not("toast_client_secret", "is", null);
-    if (data.location_id) q = q.eq("id", data.location_id);
-    const { data: locs, error } = await q;
+    const { data: locs, error } = await selectToastLocations(supabaseAdmin, data.location_id);
     if (error) throw new Error(error.message);
 
     const results: SyncResult[] = [];
@@ -301,7 +321,7 @@ export const syncToast = createServerFn({ method: "POST" })
         status: "ok",
       };
       try {
-        const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
+        const base = ((loc as any).toast_api_url || TOAST_BASE).replace(/\/+$/, "");
         const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
         const total = await toastDayTotalWithBase(base, token, loc.toast_restaurant_guid, businessDate);
         r.total_cents = total;
