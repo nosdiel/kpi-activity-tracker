@@ -930,82 +930,57 @@ async function fetchToastMenuItems(
   accessToken: string,
   restaurantGuid: string
 ): Promise<MenuItem[]> {
-  // Try Toast's published Menus v2 first — single request, fast, no polling.
+  // Use Toast's published Menus v2 — single request, fast, no polling.
+  // We deliberately do NOT fall back to the Analytics menu report here,
+  // because that path polls for up to 30s per day and reliably triggers
+  // upstream request timeouts.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
+  let res: Response;
   try {
-    const res = await fetch(`${base}/menus/v2/menus`, {
+    res = await fetch(`${base}/menus/v2/menus`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
         "Toast-Restaurant-External-ID": restaurantGuid,
       },
+      signal: controller.signal,
     });
-    if (res.ok) {
-      const body: any = await res.json();
-      const out: MenuItem[] = [];
-      const seen = new Set<string>();
-      const menus: any[] = Array.isArray(body?.menus) ? body.menus : Array.isArray(body) ? body : [];
-      for (const menu of menus) {
-        const menuName: string = String(menu?.name ?? "").trim();
-        const walk = (groups: any[], path: string) => {
-          for (const group of groups ?? []) {
-            const groupName = String(group?.name ?? "").trim();
-            const pathHere = groupName || path || menuName;
-            const items = group?.menuItems ?? group?.items ?? group?.menu_items ?? [];
-            for (const rawItem of items) {
-              const item = rawItem?.item ?? rawItem;
-              const id = String(item?.guid ?? item?.entityId ?? item?.referenceId ?? item?.externalId ?? item?.name ?? "").trim();
-              const name = String(item?.name ?? item?.displayName ?? "").trim();
-              if (!id || !name || seen.has(id)) continue;
-              seen.add(id);
-              out.push({ id, name, category: pathHere || null });
-            }
-            const childGroups = group?.menuGroups ?? group?.groups ?? group?.subgroups ?? group?.subGroups ?? [];
-            if (Array.isArray(childGroups) && childGroups.length) walk(childGroups, pathHere);
-          }
-        };
-        walk(menu?.menuGroups ?? menu?.groups ?? [], "");
-      }
-      if (out.length > 0) {
-        out.sort((a, b) => a.name.localeCompare(b.name));
-        return out;
-      }
-    }
-  } catch {
-    // fall through to analytics fallback
+  } finally {
+    clearTimeout(timer);
   }
-
-  // Fallback: Analytics menu report (slower, requires enterprise-metrics:read).
-  const toCompact = (d: Date) =>
-    Number(
-      `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
-    );
-  const days: number[] = [];
-  for (let i = 1; i <= 3; i++) {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() - i);
-    days.push(toCompact(d));
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Toast Menus v2 ${res.status}: ${body.slice(0, 240)}`);
   }
-  const results = await Promise.allSettled(
-    days.map((d) => fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, d))
-  );
+  const body: any = await res.json();
   const out: MenuItem[] = [];
   const seen = new Set<string>();
-  let lastErr = "";
-  let okCount = 0;
-  for (const r of results) {
-    if (r.status === "rejected") { lastErr = (r.reason as Error)?.message ?? String(r.reason); continue; }
-    okCount += 1;
-    for (const row of r.value) {
-      const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
-      const name = String(row?.menuItemName ?? "").trim();
-      if (!id || !name || seen.has(id)) continue;
-      seen.add(id);
-      out.push({ id, name, category: row?.menuGroupName ?? row?.salesCategory ?? null });
-    }
+  const menus: any[] = Array.isArray(body?.menus) ? body.menus : Array.isArray(body) ? body : [];
+  for (const menu of menus) {
+    const menuName: string = String(menu?.name ?? "").trim();
+    const walk = (groups: any[], path: string) => {
+      for (const group of groups ?? []) {
+        const groupName = String(group?.name ?? "").trim();
+        const pathHere = groupName || path || menuName;
+        const items = group?.menuItems ?? group?.items ?? group?.menu_items ?? [];
+        for (const rawItem of items) {
+          const item = rawItem?.item ?? rawItem;
+          const id = String(item?.guid ?? item?.entityId ?? item?.referenceId ?? item?.externalId ?? item?.name ?? "").trim();
+          const name = String(item?.name ?? item?.displayName ?? "").trim();
+          if (!id || !name || seen.has(id)) continue;
+          seen.add(id);
+          out.push({ id, name, category: pathHere || null });
+        }
+        const childGroups = group?.menuGroups ?? group?.groups ?? group?.subgroups ?? group?.subGroups ?? [];
+        if (Array.isArray(childGroups) && childGroups.length) walk(childGroups, pathHere);
+      }
+    };
+    walk(menu?.menuGroups ?? menu?.groups ?? [], "");
   }
-  if (okCount === 0 && lastErr) throw new Error(lastErr);
   out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
+
 
 export const listPosMenuItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
