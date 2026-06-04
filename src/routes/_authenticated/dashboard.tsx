@@ -182,23 +182,12 @@ function DashboardPage() {
     },
   });
 
-  const monthFocusQ = useQuery({
-    queryKey: ["dashboard-focus-item", locationId, monthStart],
-    enabled: !!locationId && !!monthStart,
-    queryFn: async () => {
-      const start = `${monthStart}-01`;
-      const endDate = new Date(`${start}T00:00:00Z`);
-      endDate.setUTCMonth(endDate.getUTCMonth() + 1);
-      const end = endDate.toISOString().slice(0, 10);
-      const { data, error } = await supabase
-        .from("daily_sales")
-        .select("business_date,dessert_count")
-        .eq("location_id", locationId)
-        .gte("business_date", start)
-        .lt("business_date", end);
-      if (error) throw error;
-      return (data ?? []) as { business_date: string; dessert_count: number | null }[];
-    },
+  const fetchFocusQty = useServerFn(getTrackableItemDailyQuantity);
+  const focusDailyQ = useQuery({
+    queryKey: ["dashboard-focus-daily", locationId, dates[0], dates[6]],
+    enabled: !!locationId && dates.length === 7,
+    queryFn: () => fetchFocusQty({ data: { location_id: locationId, dates } }),
+    staleTime: 5 * 60_000,
   });
 
   const targetQ = useQuery({
