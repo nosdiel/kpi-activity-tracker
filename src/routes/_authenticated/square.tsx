@@ -36,10 +36,14 @@ type LocStatus = {
   provider: "square" | "toast" | null;
   square_location_id: string | null;
   square_token_set: boolean;
+  toast_credential_name: string | null;
+  toast_api_url: string | null;
   toast_restaurant_guid: string | null;
   toast_client_id: string | null;
   toast_secret_set: boolean;
 };
+
+const TOAST_DEFAULT_URL = "https://ws-api.toasttab.com";
 
 export function PosPage({ source }: { source: "square" | "toast" }) {
   const qc = useQueryClient();
@@ -51,6 +55,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   const [form, setForm] = useState({
     square_location_id: "",
     square_access_token: "",
+    toast_credential_name: "",
+    toast_api_url: TOAST_DEFAULT_URL,
     toast_restaurant_guid: "",
     toast_client_id: "",
     toast_client_secret: "",
@@ -108,6 +114,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
     setForm({
       square_location_id: loc.square_location_id ?? "",
       square_access_token: "",
+      toast_credential_name: loc.toast_credential_name ?? "",
+      toast_api_url: loc.toast_api_url ?? TOAST_DEFAULT_URL,
       toast_restaurant_guid: loc.toast_restaurant_guid ?? "",
       toast_client_id: loc.toast_client_id ?? "",
       toast_client_secret: "",
@@ -298,6 +306,31 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
           ) : (
             <div className="space-y-3">
               <div className="space-y-2">
+                <Label>Credential set name</Label>
+                <Input
+                  value={form.toast_credential_name}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, toast_credential_name: e.target.value }))
+                  }
+                  placeholder="e.g. NiNi Manager"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Matches the credential set name in Toast Web (Integrations → API access).
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>API access URL</Label>
+                <Input
+                  value={form.toast_api_url}
+                  onChange={(e) => setForm((f) => ({ ...f, toast_api_url: e.target.value }))}
+                  placeholder={TOAST_DEFAULT_URL}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>API access type</Label>
+                <Input value="TOAST_MACHINE_CLIENT" readOnly disabled />
+              </div>
+              <div className="space-y-2">
                 <Label>Toast Restaurant GUID</Label>
                 <Input
                   value={form.toast_restaurant_guid}
@@ -308,7 +341,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Toast Client ID</Label>
+                <Label>Client ID</Label>
                 <Input
                   value={form.toast_client_id}
                   onChange={(e) =>
@@ -319,7 +352,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
               </div>
               <div className="space-y-2">
                 <Label>
-                  Toast Client Secret (production){" "}
+                  Client secret (production){" "}
                   {editing?.toast_secret_set && (
                     <span className="text-xs text-muted-foreground">— currently set</span>
                   )}
@@ -331,6 +364,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                     setForm((f) => ({ ...f, toast_client_secret: e.target.value }))
                   }
                   autoComplete="off"
+                  placeholder="Paste secret (leave blank to keep current)"
                 />
               </div>
             </div>
@@ -345,6 +379,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                   payload.square_location_id = form.square_location_id;
                   if (form.square_access_token) payload.square_access_token = form.square_access_token;
                 } else {
+                  payload.toast_credential_name = form.toast_credential_name;
+                  payload.toast_api_url = form.toast_api_url || TOAST_DEFAULT_URL;
                   payload.toast_restaurant_guid = form.toast_restaurant_guid;
                   payload.toast_client_id = form.toast_client_id;
                   if (form.toast_client_secret) payload.toast_client_secret = form.toast_client_secret;

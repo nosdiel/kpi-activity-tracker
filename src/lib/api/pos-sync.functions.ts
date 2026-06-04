@@ -205,6 +205,69 @@ async function toastDayTotal(
   return totalCents;
 }
 
+async function toastAccessTokenWithBase(
+  base: string,
+  clientId: string,
+  clientSecret: string
+): Promise<string> {
+  const res = await fetch(`${base}/authentication/v1/authentication/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      clientId,
+      clientSecret,
+      userAccessType: "TOAST_MACHINE_CLIENT",
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Toast auth ${res.status}: ${(await res.text()).slice(0, 240)}`);
+  }
+  const json = (await res.json()) as { token?: { accessToken?: string } };
+  const tok = json.token?.accessToken;
+  if (!tok) throw new Error("Toast auth: missing accessToken");
+  return tok;
+}
+
+async function toastDayTotalWithBase(
+  base: string,
+  accessToken: string,
+  restaurantGuid: string,
+  businessDate: string
+): Promise<number> {
+  const compact = businessDate.replace(/-/g, "");
+  let page = 1;
+  let totalCents = 0;
+  for (;;) {
+    const url = `${base}/orders/v2/ordersBulk?businessDate=${compact}&page=${page}&pageSize=100`;
+    const res = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Toast-Restaurant-External-ID": restaurantGuid,
+      },
+    });
+    if (!res.ok) throw new Error(`Toast ${res.status}: ${(await res.text()).slice(0, 240)}`);
+    const orders = (await res.json()) as Array<{
+      voided?: boolean;
+      checks?: Array<{ totalAmount?: number; voided?: boolean }>;
+    }>;
+    if (!orders || orders.length === 0) break;
+    for (const o of orders) {
+      if (o.voided) continue;
+      for (const c of o.checks ?? []) {
+        if (c.voided) continue;
+        totalCents += Math.round(Number(c.totalAmount ?? 0) * 100);
+      }
+    }
+    if (orders.length < 100) break;
+    page += 1;
+  }
+  return totalCents;
+}
+
+// keep older helpers referenced (suppress unused warnings)
+void toastAccessToken;
+void toastDayTotal;
+
 export const syncToast = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -221,7 +284,7 @@ export const syncToast = createServerFn({ method: "POST" })
 
     let q = supabaseAdmin
       .from("locations")
-      .select("id,name,toast_restaurant_guid,toast_client_id,toast_client_secret")
+      .select("id,name,toast_restaurant_guid,toast_client_id,toast_client_secret,toast_api_url,toast_credential_name")
       .not("toast_restaurant_guid", "is", null)
       .not("toast_client_id", "is", null)
       .not("toast_client_secret", "is", null);
@@ -238,8 +301,9 @@ export const syncToast = createServerFn({ method: "POST" })
         status: "ok",
       };
       try {
-        const token = await toastAccessToken(loc.toast_client_id, loc.toast_client_secret);
-        const total = await toastDayTotal(token, loc.toast_restaurant_guid, businessDate);
+        const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
+        const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+        const total = await toastDayTotalWithBase(base, token, loc.toast_restaurant_guid, businessDate);
         r.total_cents = total;
         await upsertDailySales(supabaseAdmin, loc.id, businessDate, total, "toast");
       } catch (e) {
@@ -267,6 +331,8 @@ export const updateLocationPosCredentials = createServerFn({ method: "POST" })
         square_location_id: z.string().max(64).nullable().optional(),
         square_access_token: z.string().min(10).max(512).nullable().optional(),
         // Toast
+        toast_credential_name: z.string().max(128).nullable().optional(),
+        toast_api_url: z.string().url().max(256).nullable().optional(),
         toast_restaurant_guid: z.string().max(64).nullable().optional(),
         toast_client_id: z.string().max(128).nullable().optional(),
         toast_client_secret: z.string().min(10).max(512).nullable().optional(),
@@ -281,6 +347,8 @@ export const updateLocationPosCredentials = createServerFn({ method: "POST" })
     };
     setIfPresent("square_location_id");
     setIfPresent("square_access_token");
+    setIfPresent("toast_credential_name");
+    setIfPresent("toast_api_url");
     setIfPresent("toast_restaurant_guid");
     setIfPresent("toast_client_id");
     setIfPresent("toast_client_secret");
@@ -301,7 +369,7 @@ export const getLocationsPosStatus = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("locations")
       .select(
-        "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret"
+        "id,name,pos_provider,square_location_id,square_access_token,toast_credential_name,toast_api_url,toast_restaurant_guid,toast_client_id,toast_client_secret"
       )
       .order("name");
     if (error) throw new Error(error.message);
@@ -311,6 +379,8 @@ export const getLocationsPosStatus = createServerFn({ method: "GET" })
       provider: (l.pos_provider ?? null) as "square" | "toast" | null,
       square_location_id: l.square_location_id ?? null,
       square_token_set: Boolean(l.square_access_token),
+      toast_credential_name: l.toast_credential_name ?? null,
+      toast_api_url: l.toast_api_url ?? null,
       toast_restaurant_guid: l.toast_restaurant_guid ?? null,
       toast_client_id: l.toast_client_id ?? null,
       toast_secret_set: Boolean(l.toast_client_secret),
