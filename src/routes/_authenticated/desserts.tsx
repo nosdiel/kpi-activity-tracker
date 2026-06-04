@@ -107,7 +107,7 @@ function TrackableItemsPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Initial / cached lookup. Never blocks on Toast.
+  // Initial / cached lookup. Never blocks on Toast. Auto-runs when a location is picked.
   const menuQ = useQuery({
     queryKey: ["pos-menu-items", form.location_id],
     queryFn: async () => {
@@ -117,10 +117,11 @@ function TrackableItemsPage() {
       }
       return r;
     },
-    enabled: false,
+    enabled: !!form.location_id && open,
     retry: false,
     staleTime: 5 * 60_000,
   });
+
 
   // Poll loop while a Toast report is pending.
   const pollQ = useQuery({
