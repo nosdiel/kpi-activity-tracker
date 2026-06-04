@@ -879,12 +879,13 @@ async function fetchToastMenuItemsForDay(
   base: string,
   accessToken: string,
   restaurantGuid: string,
-  compactDate: number
+  compactDate: number,
+  pollBudgetMs = 10_000
 ): Promise<any[]> {
   let createRes: Response | null = null;
   let attempt = 0;
   for (;;) {
-    createRes = await fetch(`${base}/era/v1/menu/day`, {
+    createRes = await fetchWithTimeout(`${base}/era/v1/menu/day`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -897,10 +898,10 @@ async function fetchToastMenuItemsForDay(
         excludedRestaurantIds: [],
         groupBy: ["MENU_ITEM"],
       }),
-    });
-    if (createRes.status !== 429 || attempt >= 5) break;
+    }, 8_000);
+    if (createRes.status !== 429 || attempt >= 1) break;
     const ra = Number(createRes.headers.get("retry-after"));
-    const waitMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(30_000, 2000 * 2 ** attempt);
+    const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 2_000) : 1_000;
     await new Promise((r) => setTimeout(r, waitMs));
     attempt += 1;
   }
@@ -919,11 +920,11 @@ async function fetchToastMenuItemsForDay(
     throw new Error(`Toast menu report: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
   }
 
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + pollBudgetMs;
   while (Date.now() < deadline) {
-    const getRes = await fetch(`${base}/era/v1/menu/${reportRequestGuid}`, {
+    const getRes = await fetchWithTimeout(`${base}/era/v1/menu/${reportRequestGuid}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    }, 5_000);
     if (getRes.status === 200) {
       const body = await getRes.json();
       if (Array.isArray(body)) return body;
@@ -933,7 +934,7 @@ async function fetchToastMenuItemsForDay(
     if (getRes.status !== 202 && getRes.status !== 204) {
       throw new Error(`Toast menu report get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`);
     }
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 750));
   }
   throw new Error("Toast menu report: not ready in time");
 }
