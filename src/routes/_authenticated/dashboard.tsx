@@ -180,8 +180,8 @@ function DashboardPage() {
     },
   });
 
-  const monthDessertQ = useQuery({
-    queryKey: ["dashboard-dessert-month", locationId, monthStart],
+  const monthFocusQ = useQuery({
+    queryKey: ["dashboard-focus-item", locationId, monthStart],
     enabled: !!locationId && !!monthStart,
     queryFn: async () => {
       const start = `${monthStart}-01`;
@@ -231,17 +231,17 @@ function DashboardPage() {
     return m;
   }, [lySalesQ.data]);
 
-  // Dessert running total within month, up to each date
-  const dessertCumulative = useMemo(() => {
+  // Focus Item running total within month, up to each date
+  const focusCumulative = useMemo(() => {
     const m = new Map<string, number>();
-    const sorted = (monthDessertQ.data ?? []).slice().sort((a, b) => a.business_date.localeCompare(b.business_date));
+    const sorted = (monthFocusQ.data ?? []).slice().sort((a, b) => a.business_date.localeCompare(b.business_date));
     let acc = 0;
     for (const r of sorted) {
       acc += Number(r.dessert_count ?? 0);
       m.set(r.business_date, acc);
     }
     return m;
-  }, [monthDessertQ.data]);
+  }, [monthFocusQ.data]);
 
   const rows = dates.map((d, i) => {
     const s = byDate.get(d);
@@ -260,20 +260,19 @@ function DashboardPage() {
     const varCust = cust - lyCust;
     const lyAvg = lyCust > 0 ? ly / lyCust : 0;
     const actAvg = cust > 0 ? actual / cust : 0;
-    const dessertMonth = dessertCumulative.get(d) ?? 0;
+    const focusItem = focusCumulative.get(d) ?? 0;
     const hasActual = s && (s.actual_sales !== null || s.actual_customer_count !== null);
-    return { date: d, day: dayNameFromISO(d), ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, dessertMonth, hasActual };
+    return { date: d, day: dayNameFromISO(d), ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, focusItem, hasActual };
   });
-
 
   const totals = rows.reduce(
     (a, r) => {
       a.ly += r.ly; a.lyCust += r.lyCust; a.actual += r.actual; a.cust += r.cust;
       a.target += r.target; a.varSales += r.varSales; a.varCust += r.varCust;
-      a.dessertMonth = r.dessertMonth || a.dessertMonth;
+      a.focusItem = r.focusItem || a.focusItem;
       return a;
     },
-    { ly: 0, lyCust: 0, actual: 0, cust: 0, target: 0, varSales: 0, varCust: 0, dessertMonth: 0 },
+    { ly: 0, lyCust: 0, actual: 0, cust: 0, target: 0, varSales: 0, varCust: 0, focusItem: 0 },
   );
   const lyAvgTotal = totals.lyCust > 0 ? totals.ly / totals.lyCust : 0;
   const actAvgTotal = totals.cust > 0 ? totals.actual / totals.cust : 0;
@@ -294,7 +293,7 @@ function DashboardPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { salesQ.refetch(); lySalesQ.refetch(); targetQ.refetch(); monthDessertQ.refetch(); }}>
+          <Button variant="outline" size="sm" onClick={() => { salesQ.refetch(); lySalesQ.refetch(); targetQ.refetch(); monthFocusQ.refetch(); }}>
             <RefreshCw className="h-4 w-4 mr-2" /> Refresh
           </Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>
@@ -377,7 +376,7 @@ function DashboardPage() {
                 <Th right>LY Cust</Th>
                 <Th right>Actual Cust</Th>
                 <Th right>Var Cust</Th>
-                <Th right>Dessert Month</Th>
+                <Th right>Focus Item</Th>
               </tr>
             </thead>
             <tbody>
@@ -400,7 +399,7 @@ function DashboardPage() {
                   <Td right className={r.hasActual ? varClass(r.varCust) : "text-muted-foreground"}>
                     {r.hasActual ? num(r.varCust) : "—"}
                   </Td>
-                  <Td right>{num(r.dessertMonth)}</Td>
+                  <Td right>{num(r.focusItem)}</Td>
                 </tr>
               ))}
               <tr className="report-totals font-semibold">
@@ -414,7 +413,7 @@ function DashboardPage() {
                 <Td right>{num(totals.lyCust)}</Td>
                 <Td right>{num(totals.cust)}</Td>
                 <Td right className={varClass(totals.varCust)}>{num(totals.varCust)}</Td>
-                <Td right>{num0(totals.dessertMonth)}</Td>
+                <Td right>{num0(totals.focusItem)}</Td>
               </tr>
             </tbody>
           </table>
