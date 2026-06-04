@@ -5,6 +5,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import {
   syncSquare,
+  syncToast,
   updateLocationPosCredentials,
   getLocationsPosStatus,
 } from "@/lib/api/pos-sync.functions";
@@ -42,7 +43,7 @@ type LocStatus = {
 
 export function PosPage({ source }: { source: "square" | "toast" }) {
   const qc = useQueryClient();
-  const syncFn = useServerFn(syncSquare);
+  const syncFn = useServerFn(source === "square" ? syncSquare : syncToast);
   const updateCreds = useServerFn(updateLocationPosCredentials);
   const statusFn = useServerFn(getLocationsPosStatus);
   const [date, setDate] = useState("");
