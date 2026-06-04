@@ -571,6 +571,30 @@ function currentWeekDatesLastYear(): string[] {
   });
 }
 
+function daysBetweenISO(startISO: string, endISO: string): number {
+  const start = new Date(`${startISO}T00:00:00Z`).getTime();
+  const end = new Date(`${endISO}T00:00:00Z`).getTime();
+  return Math.floor((end - start) / 86_400_000);
+}
+
+function chunkDatesByMaxSpan(dates: string[], maxInclusiveDays = 366): string[][] {
+  const sorted = Array.from(new Set(dates)).sort();
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let start = "";
+  for (const date of sorted) {
+    if (!start || daysBetweenISO(start, date) + 1 > maxInclusiveDays) {
+      if (current.length) chunks.push(current);
+      current = [date];
+      start = date;
+    } else {
+      current.push(date);
+    }
+  }
+  if (current.length) chunks.push(current);
+  return chunks;
+}
+
 // Pull historical daily sales from POS for the last N days (default 365).
 // Skips days that already have actual_sales and actual_customer_count populated so repeat runs are cheap.
 export const backfillSalesRange = createServerFn({ method: "POST" })
