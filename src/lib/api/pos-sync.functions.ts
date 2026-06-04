@@ -1312,7 +1312,7 @@ export const getTrackableItemDailyQuantity = createServerFn({ method: "POST" })
       const results = await Promise.allSettled(
         data.dates.map(async (iso) => {
           const compact = Number(iso.replace(/-/g, ""));
-          const rows = await fetchToastMenuItemsForDay(base, token, loc.toast_restaurant_guid, compact);
+          const rows = await fetchToastMenuItemsForDayInline(base, token, loc.toast_restaurant_guid, compact);
           let qty = 0;
           for (const row of rows as any[]) {
             const name = String(row?.menuItemName ?? "").trim().toLowerCase();
