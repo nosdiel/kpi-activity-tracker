@@ -9,6 +9,7 @@ import {
   updateLocationPosCredentials,
   getLocationsPosStatus,
   backfillActualSales,
+  backfillSalesRange,
 } from "@/lib/api/pos-sync.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,6 +53,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   const updateCreds = useServerFn(updateLocationPosCredentials);
   const statusFn = useServerFn(getLocationsPosStatus);
   const backfillFn = useServerFn(backfillActualSales);
+  const backfillRangeFn = useServerFn(backfillSalesRange);
   const [date, setDate] = useState("");
   const [editing, setEditing] = useState<LocStatus | null>(null);
   const [form, setForm] = useState({
@@ -111,6 +113,26 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
     mutationFn: async () => backfillFn() as Promise<{ scanned: number; updated: number }>,
     onSuccess: (res) => {
       toast.success(`Backfilled ${res.updated} row(s) (scanned ${res.scanned})`);
+      qc.invalidateQueries({ queryKey: ["dashboard-sales"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-ly-sales"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const backfillRangeMut = useMutation({
+    mutationFn: async () =>
+      backfillRangeFn({ data: { source, days: 365 } }) as Promise<{
+        days: number;
+        processed: number;
+        inserted: number;
+        errors: Array<{ location_id: string; business_date: string; message: string }>;
+      }>,
+    onSuccess: (res) => {
+      const errCount = res.errors?.length ?? 0;
+      toast.success(
+        `Backfilled ${res.inserted} day(s) over ${res.days}${errCount ? `, ${errCount} failed` : ""}`
+      );
+      qc.invalidateQueries({ queryKey: ["pos_sync_log"] });
       qc.invalidateQueries({ queryKey: ["dashboard-sales"] });
       qc.invalidateQueries({ queryKey: ["dashboard-ly-sales"] });
     },
@@ -180,6 +202,13 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
               disabled={backfillMut.isPending}
             >
               {backfillMut.isPending ? "Backfilling..." : "Backfill actual_sales"}
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => backfillRangeMut.mutate()}
+              disabled={backfillRangeMut.isPending}
+            >
+              {backfillRangeMut.isPending ? "Backfilling 365 days..." : "Backfill last 365 days"}
             </Button>
             <p className="text-xs text-muted-foreground">
               Only locations with complete credentials are synced.
