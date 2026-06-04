@@ -709,6 +709,41 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         }
       }
 
+      if (source === "toast") {
+        processed += dateList.length;
+        const neededDates = dateList.filter((businessDate) => !have.has(`${loc.id}|${businessDate}`)).sort();
+        const neededSet = new Set(neededDates);
+        for (const chunk of chunkDatesByMaxSpan(neededDates)) {
+          try {
+            const rows = await fetchToastMetricsRows(
+              toastBase,
+              toastToken!,
+              loc.toast_restaurant_guid,
+              chunk[0],
+              chunk[chunk.length - 1]
+            );
+            const rowsByDate = new Map<string, ToastMetricsRow[]>();
+            for (const row of rows) {
+              const businessDate = isoFromToastBusinessDate(row.businessDate);
+              if (!businessDate || !neededSet.has(businessDate)) continue;
+              rowsByDate.set(businessDate, [...(rowsByDate.get(businessDate) ?? []), row]);
+            }
+            for (const [businessDate, dayRows] of rowsByDate) {
+              const { totalCents, customerCount } = toastTotalsFromRows(dayRows);
+              await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, source, customerCount);
+              inserted += 1;
+            }
+          } catch (e) {
+            errors.push({
+              location_id: loc.id,
+              business_date: `${chunk[0]}..${chunk[chunk.length - 1]}`,
+              message: (e as Error).message,
+            });
+          }
+        }
+        continue;
+      }
+
       for (const businessDate of dateList) {
 
         processed += 1;
