@@ -234,7 +234,6 @@ function DashboardPage() {
       }
       if (!cancelled) {
         salesQ.refetch();
-        focusDailyQ.refetch();
       }
     };
     sync();
