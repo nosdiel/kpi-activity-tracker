@@ -273,7 +273,17 @@ function UsersPage() {
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setPwValue("");
+                            setPwTarget({ id: uid, label });
+                          }}
+                        >
+                          Set password
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -292,6 +302,40 @@ function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!pwTarget} onOpenChange={(o) => !o && setPwTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {pwTarget?.label}. Super admin only.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (pwTarget) passwordMut.mutate({ target_user_id: pwTarget.id, password: pwValue });
+            }}
+          >
+            <div className="space-y-2">
+              <Label>New password</Label>
+              <Input
+                type="text"
+                minLength={8}
+                required
+                value={pwValue}
+                onChange={(e) => setPwValue(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={passwordMut.isPending}>
+                {passwordMut.isPending ? "Saving..." : "Update password"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
