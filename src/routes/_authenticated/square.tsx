@@ -119,6 +119,26 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const backfillRangeMut = useMutation({
+    mutationFn: async () =>
+      backfillRangeFn({ data: { source, days: 365 } }) as Promise<{
+        days: number;
+        processed: number;
+        inserted: number;
+        errors: Array<{ location_id: string; business_date: string; message: string }>;
+      }>,
+    onSuccess: (res) => {
+      const errCount = res.errors?.length ?? 0;
+      toast.success(
+        `Backfilled ${res.inserted} day(s) over ${res.days}${errCount ? `, ${errCount} failed` : ""}`
+      );
+      qc.invalidateQueries({ queryKey: ["pos_sync_log"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-sales"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-ly-sales"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const title = source === "square" ? "Square Sync" : "Toast Sync";
   const idLabel = source === "square" ? "Square Location ID" : "Toast Restaurant GUID";
   const rows = (locsQ.data ?? []).filter(
