@@ -642,22 +642,23 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         processed += 1;
         if (have.has(`${loc.id}|${businessDate}`)) continue;
         try {
-          let total = 0;
+          let totalCents = 0;
+          let customerCount = 0;
           if (source === "square") {
-            total = await squareDayTotal(
+            ({ totalCents, customerCount } = await squareDayTotal(
               loc.square_access_token,
               loc.square_location_id,
               businessDate
-            );
+            ));
           } else {
-            total = await toastDayTotalWithBase(
+            ({ totalCents, customerCount } = await toastDayTotalWithBase(
               toastBase,
               toastToken!,
               loc.toast_restaurant_guid,
               businessDate
-            );
+            ));
           }
-          await upsertDailySales(supabaseAdmin, loc.id, businessDate, total, source);
+          await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, source, customerCount);
           inserted += 1;
         } catch (e) {
           errors.push({
