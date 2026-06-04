@@ -238,7 +238,7 @@ async function toastAccessTokenWithBase(
   clientId: string,
   clientSecret: string
 ): Promise<string> {
-  const res = await fetch(`${base}/authentication/v1/authentication/login`, {
+  const res = await fetchWithTimeout(`${base}/authentication/v1/authentication/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -246,7 +246,7 @@ async function toastAccessTokenWithBase(
       clientSecret,
       userAccessType: "TOAST_MACHINE_CLIENT",
     }),
-  });
+  }, 5_000);
   if (!res.ok) {
     throw new Error(`Toast auth ${res.status}: ${(await res.text()).slice(0, 240)}`);
   }
