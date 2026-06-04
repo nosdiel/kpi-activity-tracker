@@ -376,7 +376,7 @@ function DashboardPage() {
                 <Th right>LY Cust</Th>
                 <Th right>Actual Cust</Th>
                 <Th right>Var Cust</Th>
-                <Th right>Dessert Month</Th>
+                <Th right>Focus Item</Th>
               </tr>
             </thead>
             <tbody>
