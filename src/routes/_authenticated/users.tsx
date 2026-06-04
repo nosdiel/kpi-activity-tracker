@@ -53,11 +53,12 @@ function UsersPage() {
 
   const profilesQ = useQuery({
     queryKey: ["profiles"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("profiles").select("*");
-      if (error) throw error;
-      return (data ?? []) as Array<Record<string, unknown>>;
-    },
+    queryFn: () => listFn(),
+  });
+  void supabase;
+  const _unused = (async () => {
+    return null;
+  });
   });
 
   const rolesQ = useQuery({
