@@ -358,11 +358,11 @@ function TrackableItemsPage() {
                     variant="ghost"
                     size="sm"
                     className="h-7 px-2 text-xs"
-                    onClick={() => menuQ.refetch()}
-                    disabled={menuQ.isFetching}
+                    onClick={handleSync}
+                    disabled={isPending}
                   >
-                    <RefreshCw className={cn("h-3 w-3 mr-1", menuQ.isFetching && "animate-spin")} />
-                    Refresh menu
+                    <RefreshCw className={cn("h-3 w-3 mr-1", isPending && "animate-spin")} />
+                    {isPending ? "Syncing…" : "Refresh menu"}
                   </Button>
                 )}
               </div>
@@ -376,11 +376,11 @@ function TrackableItemsPage() {
                       variant="outline"
                       role="combobox"
                       className="w-full justify-between font-normal"
-                      disabled={menuQ.isFetching && menuItems.length === 0}
+                      disabled={isPending && menuItems.length === 0}
                     >
                       <span className="truncate">
-                        {menuQ.isFetching && menuItems.length === 0
-                          ? "Loading menu items..."
+                        {isPending && menuItems.length === 0
+                          ? "Report requested — still processing…"
                           : form.pos_product || (menuQ.data || menuQ.error ? "Select a POS menu item..." : "Refresh menu to load POS items...")}
                       </span>
                       <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
@@ -391,10 +391,14 @@ function TrackableItemsPage() {
                       <CommandInput placeholder="Search menu items..." />
                       <CommandList>
                         <CommandEmpty>
-                          {menuQ.error
+                          {syncError
+                            ? `Error: ${syncError}`
+                            : menuQ.error
                             ? `Error: ${(menuQ.error as Error).message}`
                             : menuQ.data?.error
                             ? `Error: ${menuQ.data.error}`
+                            : isPending
+                            ? "Still processing, check again in a few seconds."
                             : !menuQ.data
                             ? "Click Refresh menu to load POS items."
                             : menuItems.length === 0
