@@ -903,7 +903,7 @@ async function fetchToastMenuItems(
       }
     } else {
       const arr = Array.isArray(json) ? json : (json.menuItems ?? []);
-      for (const it of arr) push(it.guid, it.name, null);
+      for (const it of arr) push(it.guid, it.name, undefined);
     }
     if (out.length > 0) {
       out.sort((a, b) => a.name.localeCompare(b.name));
