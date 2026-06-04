@@ -256,7 +256,7 @@ function DashboardPage() {
     (a, r) => {
       a.ly += r.ly; a.lyCust += r.lyCust; a.actual += r.actual; a.cust += r.cust;
       a.target += r.target; a.varSales += r.varSales; a.varCust += r.varCust;
-      a.focusItem = r.focusItem || a.focusItem;
+      a.focusItem += r.focusItem;
       return a;
     },
     { ly: 0, lyCust: 0, actual: 0, cust: 0, target: 0, varSales: 0, varCust: 0, focusItem: 0 },
