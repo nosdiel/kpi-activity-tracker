@@ -127,7 +127,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   });
 
   const backfillRangeMut = useMutation({
-    mutationFn: async (vars: { days?: number; start_date?: string; end_date?: string }) =>
+    mutationFn: async (vars: { days?: number; start_date?: string; end_date?: string; include_last_year?: boolean }) =>
       backfillRangeFn({ data: { source, ...vars } }) as Promise<{
         days: number;
         processed: number;
@@ -213,10 +213,10 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
             </Button>
             <Button
               variant="secondary"
-              onClick={() => backfillRangeMut.mutate({ days: 365 })}
+              onClick={() => backfillRangeMut.mutate({ days: 365, include_last_year: true })}
               disabled={backfillRangeMut.isPending}
             >
-              {backfillRangeMut.isPending ? "Backfilling 365 days..." : "Backfill last 365 days"}
+              {backfillRangeMut.isPending ? "Backfilling..." : "Backfill last 365 days + LY"}
             </Button>
             <p className="text-xs text-muted-foreground">
               Only locations with complete credentials are synced.
@@ -256,7 +256,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
               {backfillRangeMut.isPending ? "Backfilling..." : "Backfill date range"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Use a range that spans last year to populate LY Sales on the dashboard.
+              Backfills sales and guest counts; the 365-day button also pulls matching LY Sales dates.
             </p>
           </div>
 
