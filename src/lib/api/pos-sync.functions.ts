@@ -239,25 +239,37 @@ async function toastDayTotalWithBase(
   // Docs: https://doc.toasttab.com/doc/devguide/apiAnalyticsMetricsReportingDataCreateRequest.html
   const compact = Number(businessDate.replace(/-/g, "")); // YYYYMMDD integer
 
-  // 1) Create the report request for a single day, for this restaurant only.
-  const createRes = await fetch(`${base}/era/v1/metrics/day`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      startBusinessDate: compact,
-      endBusinessDate: compact,
-      restaurantIds: [restaurantGuid],
-      excludedRestaurantIds: [],
-    }),
-  });
-  if (!createRes.ok) {
+  // 1) Create the report request for a single day, with 429 retry/backoff.
+  let createRes: Response | null = null;
+  {
+    let attempt = 0;
+    for (;;) {
+      createRes = await fetch(`${base}/era/v1/metrics/day`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          startBusinessDate: compact,
+          endBusinessDate: compact,
+          restaurantIds: [restaurantGuid],
+          excludedRestaurantIds: [],
+        }),
+      });
+      if (createRes.status !== 429 || attempt >= 5) break;
+      const ra = Number(createRes.headers.get("retry-after"));
+      const waitMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(30_000, 2000 * 2 ** attempt);
+      await new Promise((r) => setTimeout(r, waitMs));
+      attempt += 1;
+    }
+  }
+  if (!createRes!.ok) {
     throw new Error(
-      `Toast analytics create ${createRes.status}: ${(await createRes.text()).slice(0, 240)}`
+      `Toast analytics create ${createRes!.status}: ${(await createRes!.text()).slice(0, 240)}`
     );
   }
+
   // Response is a JSON string containing the reportRequestGuid.
   const createdRaw = await createRes.text();
   let reportRequestGuid = "";
