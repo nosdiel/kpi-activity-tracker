@@ -511,3 +511,126 @@ export const backfillActualSales = createServerFn({ method: "POST" })
     return { ok: true, scanned, updated };
   });
 
+function isoDaysAgo(n: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+// Pull historical daily sales from POS for the last N days (default 365).
+// Skips days that already have actual_sales > 0 so repeat runs are cheap.
+export const backfillSalesRange = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        source: z.enum(["square", "toast"]),
+        days: z.number().int().min(1).max(730).optional(),
+        location_id: z.string().uuid().optional(),
+      })
+      .parse(input)
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const days = data.days ?? 365;
+    const source = data.source;
+
+    let locs: any[] = [];
+    if (source === "square") {
+      let q = supabaseAdmin
+        .from("locations")
+        .select("id,name,square_location_id,square_access_token")
+        .not("square_location_id", "is", null)
+        .not("square_access_token", "is", null);
+      if (data.location_id) q = q.eq("id", data.location_id);
+      const { data: rows, error } = await q;
+      if (error) throw new Error(error.message);
+      locs = rows ?? [];
+    } else {
+      const { data: rows, error } = await selectToastLocations(supabaseAdmin, data.location_id);
+      if (error) throw new Error(error.message);
+      locs = rows ?? [];
+    }
+
+    const startDate = isoDaysAgo(days);
+    const endDate = isoDaysAgo(1);
+    const locIds = locs.map((l: any) => l.id);
+    const have = new Set<string>();
+    if (locIds.length > 0) {
+      const { data: existing, error: exErr } = await supabaseAdmin
+        .from("daily_sales")
+        .select("location_id,business_date,actual_sales")
+        .in("location_id", locIds)
+        .gte("business_date", startDate)
+        .lte("business_date", endDate);
+      if (exErr) throw new Error(exErr.message);
+      for (const r of (existing ?? []) as Array<{
+        location_id: string;
+        business_date: string;
+        actual_sales: number | null;
+      }>) {
+        if (r.actual_sales && r.actual_sales > 0) have.add(`${r.location_id}|${r.business_date}`);
+      }
+    }
+
+    let processed = 0;
+    let inserted = 0;
+    const errors: Array<{ location_id: string; business_date: string; message: string }> = [];
+
+    for (const loc of locs) {
+      let toastToken: string | null = null;
+      let toastBase = TOAST_BASE;
+      if (source === "toast") {
+        toastBase = (((loc as any).toast_api_url || TOAST_BASE) as string).replace(/\/+$/, "");
+        try {
+          toastToken = await toastAccessTokenWithBase(
+            toastBase,
+            loc.toast_client_id,
+            loc.toast_client_secret
+          );
+        } catch (e) {
+          errors.push({
+            location_id: loc.id,
+            business_date: "-",
+            message: `auth: ${(e as Error).message}`,
+          });
+          continue;
+        }
+      }
+
+      for (let i = 1; i <= days; i++) {
+        const businessDate = isoDaysAgo(i);
+        processed += 1;
+        if (have.has(`${loc.id}|${businessDate}`)) continue;
+        try {
+          let total = 0;
+          if (source === "square") {
+            total = await squareDayTotal(
+              loc.square_access_token,
+              loc.square_location_id,
+              businessDate
+            );
+          } else {
+            total = await toastDayTotalWithBase(
+              toastBase,
+              toastToken!,
+              loc.toast_restaurant_guid,
+              businessDate
+            );
+          }
+          await upsertDailySales(supabaseAdmin, loc.id, businessDate, total, source);
+          inserted += 1;
+        } catch (e) {
+          errors.push({
+            location_id: loc.id,
+            business_date: businessDate,
+            message: (e as Error).message,
+          });
+        }
+      }
+    }
+
+    return { ok: true, days, processed, inserted, errors };
+  });
+
+
