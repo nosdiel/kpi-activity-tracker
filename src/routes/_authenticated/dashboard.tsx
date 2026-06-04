@@ -152,6 +152,8 @@ function DashboardPage() {
 
   const monthStart = dates[0]?.slice(0, 7);
 
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+
   const salesQ = useQuery({
     queryKey: ["dashboard-sales", locationId, dates[0], dates[6]],
     enabled: !!locationId && dates.length === 7,
@@ -165,6 +167,8 @@ function DashboardPage() {
       if (error) throw error;
       return (data ?? []) as DailySale[];
     },
+    refetchInterval: SIX_HOURS,
+    refetchIntervalInBackground: true,
   });
 
   const lySalesQ = useQuery({
@@ -180,6 +184,8 @@ function DashboardPage() {
       if (error) throw error;
       return (data ?? []) as { business_date: string; actual_sales: number | null; total_cents: number | null; actual_customer_count: number | null }[];
     },
+    refetchInterval: SIX_HOURS,
+    refetchIntervalInBackground: true,
   });
 
   const fetchFocusQty = useServerFn(getTrackableItemDailyQuantity);
@@ -188,6 +194,8 @@ function DashboardPage() {
     enabled: !!locationId && dates.length === 7,
     queryFn: () => fetchFocusQty({ data: { location_id: locationId, dates } }),
     staleTime: 5 * 60_000,
+    refetchInterval: SIX_HOURS,
+    refetchIntervalInBackground: true,
   });
 
   const targetQ = useQuery({
@@ -409,7 +417,7 @@ function DashboardPage() {
                 <Td right>{money(totals.ly)}</Td>
                 <Td right>{money(totals.target)}</Td>
                 <Td right>{money(totals.actual)}</Td>
-                <Td right className={varClass(totals.varSales)}>{money(totals.varSales)}</Td>
+                <Td right className={varClass(wtd.varSales)}>{money(wtd.varSales)}</Td>
                 <Td right>{money(lyAvgTotal)}</Td>
                 <Td right>{money(actAvgTotal)}</Td>
                 <Td right>{num(totals.lyCust)}</Td>
