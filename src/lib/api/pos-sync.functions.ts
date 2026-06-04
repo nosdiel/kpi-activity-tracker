@@ -935,9 +935,10 @@ async function fetchToastMenuItems(
       `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
     );
 
-  // Pull the last 14 days, one report per day, in parallel. Skip today (often not yet closed).
+  // Pull a small recent window (3 days) in parallel — menus rarely change, so this
+  // is plenty to populate the catalog and keeps refresh fast. Skip today (often not yet closed).
   const days: number[] = [];
-  for (let i = 1; i <= 14; i++) {
+  for (let i = 1; i <= 3; i++) {
     const d = new Date();
     d.setUTCDate(d.getUTCDate() - i);
     days.push(toCompact(d));
