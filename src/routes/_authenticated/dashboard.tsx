@@ -7,9 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  periodWeekRange,
-  periodForWeek,
-  quarterForPeriod,
+  quarterForWeek,
+  quarterWeekRange,
+  shiftISODate,
   weekDates,
   currentFiscalWeek,
 } from "@/lib/fiscal";
@@ -52,6 +52,12 @@ const actualSalesValue = (row?: { actual_sales: number | null; total_cents?: num
   const totalCents = row?.total_cents == null ? null : Number(row.total_cents);
   return actual === 0 && totalCents !== null && totalCents > 0 ? totalCents / 100 : actual;
 };
+const withFY2027 = (rows: FY[] = []) => {
+  if (rows.some((r) => r.fiscal_year === 2027)) return rows;
+  const fy2026 = rows.find((r) => r.fiscal_year === 2026);
+  const start_date = fy2026 ? shiftISODate(fy2026.start_date, 364) : "2026-12-27";
+  return [{ fiscal_year: 2027, start_date }, ...rows].sort((a, b) => b.fiscal_year - a.fiscal_year);
+};
 
 function DashboardPage() {
   const [locationId, setLocationId] = useState<string>("");
@@ -89,21 +95,23 @@ function DashboardPage() {
   }, [locationsQ.data, locationId]);
 
   useEffect(() => {
-    if (fy === null && fyQ.data && fyQ.data.length > 0) {
-      const latest = fyQ.data[0];
+    const years = withFY2027(fyQ.data ?? []);
+    if (fy === null && years.length > 0) {
+      const latest = years[0];
       setFy(latest.fiscal_year);
       setWeek(currentFiscalWeek(latest.start_date));
     }
   }, [fyQ.data, fy]);
 
+  const fiscalYears = useMemo(() => withFY2027(fyQ.data ?? []), [fyQ.data]);
+
   const fyRow = useMemo(
-    () => fyQ.data?.find((r) => r.fiscal_year === fy) ?? null,
-    [fyQ.data, fy],
+    () => fiscalYears.find((r) => r.fiscal_year === fy) ?? null,
+    [fiscalYears, fy],
   );
 
-  const period = week ? periodForWeek(week) : 1;
-  const quarter = quarterForPeriod(period);
-  const periodRange = periodWeekRange(period);
+  const quarter = week ? quarterForWeek(week) : 1;
+  const quarterRange = quarterWeekRange(quarter);
 
   const dates = useMemo(
     () => (fyRow && week ? weekDates(fyRow.start_date, week) : []),
@@ -112,8 +120,8 @@ function DashboardPage() {
 
   // Last year = same fiscal week + same weekday (prev fiscal year), fallback to -364 days.
   const prevFyRow = useMemo(
-    () => fyQ.data?.find((r) => r.fiscal_year === (fy ?? 0) - 1) ?? null,
-    [fyQ.data, fy],
+    () => fiscalYears.find((r) => r.fiscal_year === (fy ?? 0) - 1) ?? null,
+    [fiscalYears, fy],
   );
   const lyDates = useMemo(
     () => {
