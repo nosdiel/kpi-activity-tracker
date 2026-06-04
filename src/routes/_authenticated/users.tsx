@@ -55,7 +55,8 @@ function UsersPage() {
     queryKey: ["profiles"],
     queryFn: () => listFn(),
   });
-  void supabase;
+
+
 
 
   const rolesQ = useQuery({
