@@ -99,6 +99,17 @@ function DashboardPage() {
     [fyRow, week],
   );
 
+  // Same physical week last year = each date minus 364 days (preserves weekday).
+  const lyDates = useMemo(
+    () =>
+      dates.map((d) => {
+        const dt = new Date(`${d}T00:00:00Z`);
+        dt.setUTCDate(dt.getUTCDate() - 364);
+        return dt.toISOString().slice(0, 10);
+      }),
+    [dates],
+  );
+
   const monthStart = dates[0]?.slice(0, 7);
 
   const salesQ = useQuery({
@@ -113,6 +124,21 @@ function DashboardPage() {
         .lte("business_date", dates[6]);
       if (error) throw error;
       return (data ?? []) as DailySale[];
+    },
+  });
+
+  const lySalesQ = useQuery({
+    queryKey: ["dashboard-ly-sales", locationId, lyDates[0], lyDates[6]],
+    enabled: !!locationId && lyDates.length === 7,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("daily_sales")
+        .select("business_date,actual_sales,actual_customer_count")
+        .eq("location_id", locationId)
+        .gte("business_date", lyDates[0])
+        .lte("business_date", lyDates[6]);
+      if (error) throw error;
+      return (data ?? []) as { business_date: string; actual_sales: number | null; actual_customer_count: number | null }[];
     },
   });
 
@@ -159,6 +185,14 @@ function DashboardPage() {
     return m;
   }, [salesQ.data]);
 
+  const lyByDate = useMemo(() => {
+    const m = new Map<string, { actual_sales: number | null; actual_customer_count: number | null }>();
+    (lySalesQ.data ?? []).forEach((r) =>
+      m.set(r.business_date, { actual_sales: r.actual_sales, actual_customer_count: r.actual_customer_count }),
+    );
+    return m;
+  }, [lySalesQ.data]);
+
   // Dessert running total within month, up to each date
   const dessertCumulative = useMemo(() => {
     const m = new Map<string, number>();
@@ -173,8 +207,10 @@ function DashboardPage() {
 
   const rows = dates.map((d, i) => {
     const s = byDate.get(d);
-    const ly = Number(s?.last_year_sales ?? 0);
-    const lyCust = Number(s?.last_year_customer_count ?? 0);
+    const lyRow = lyByDate.get(lyDates[i]);
+    // Prefer actual sales from same weekday last year; fall back to stored last_year_sales.
+    const ly = Number(lyRow?.actual_sales ?? s?.last_year_sales ?? 0);
+    const lyCust = Number(lyRow?.actual_customer_count ?? s?.last_year_customer_count ?? 0);
     const actual = Number(s?.actual_sales ?? 0);
     const cust = Number(s?.actual_customer_count ?? 0);
     const target = ly * (1 + targetPct);
@@ -186,6 +222,7 @@ function DashboardPage() {
     const hasActual = s && (s.actual_sales !== null || s.actual_customer_count !== null);
     return { date: d, day: DAY_NAMES[i], ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, dessertMonth, hasActual };
   });
+
 
   const totals = rows.reduce(
     (a, r) => {
