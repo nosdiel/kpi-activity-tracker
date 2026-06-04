@@ -231,13 +231,11 @@ function UsersPage() {
               </TableHeader>
               <TableBody>
                 {(profilesQ.data ?? []).map((p) => {
-                  const uid = String(p.id ?? p.user_id ?? "");
+                  const uid = p.id;
                   const currentRole =
                     ((rolesQ.data ?? []).find((r) => r.user_id === uid)?.role as Role) ??
                     undefined;
-                  const label = String(
-                    p.email ?? p.display_name ?? p.full_name ?? uid.slice(0, 8)
-                  );
+                  const label = p.email || p.display_name || uid.slice(0, 8);
                   return (
                     <TableRow key={uid}>
                       <TableCell>{label}</TableCell>
