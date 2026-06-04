@@ -258,7 +258,9 @@ function compactBusinessDate(iso: string) {
 }
 
 function isoFromToastBusinessDate(value: string | number | undefined) {
-  const compact = String(value ?? "");
+  const raw = String(value ?? "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const compact = raw.replace(/\D/g, "");
   return /^\d{8}$/.test(compact) ? `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}` : "";
 }
 
@@ -598,7 +600,7 @@ function daysBetweenISO(startISO: string, endISO: string): number {
   return Math.floor((end - start) / 86_400_000);
 }
 
-function chunkDatesByMaxSpan(dates: string[], maxInclusiveDays = 31): string[][] {
+function chunkDatesByMaxSpan(dates: string[], maxInclusiveDays = 366): string[][] {
   const sorted = Array.from(new Set(dates)).sort();
   const chunks: string[][] = [];
   let current: string[] = [];
@@ -736,7 +738,7 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         const neededSet = new Set(neededDates);
         for (const chunk of chunkDatesByMaxSpan(neededDates)) {
           try {
-            const timeRange = chunk.length <= 7 ? "week" : "month";
+            const timeRange = chunk.length <= 7 ? "week" : chunk.length <= 31 ? "month" : "year";
             const rows = await fetchToastMetricsRows(
               toastBase,
               toastToken!,
