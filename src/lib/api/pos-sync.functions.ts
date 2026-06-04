@@ -831,6 +831,19 @@ export const clearSyncErrors = createServerFn({ method: "POST" })
 
 type MenuItem = { id: string; name: string; category?: string | null };
 
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw new Error("Toast Analytics request timed out");
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchSquareMenuItems(accessToken: string): Promise<MenuItem[]> {
   const items: MenuItem[] = [];
   let cursor: string | undefined;
