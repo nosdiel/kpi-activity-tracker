@@ -115,6 +115,17 @@ function UsersPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const passwordMut = useMutation({
+    mutationFn: ({ target_user_id, password }: { target_user_id: string; password: string }) =>
+      passwordFn({ data: { target_user_id, password } }),
+    onSuccess: () => {
+      toast.success("Password updated");
+      setPwTarget(null);
+      setPwValue("");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between gap-4">
