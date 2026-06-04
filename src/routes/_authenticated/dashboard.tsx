@@ -409,7 +409,7 @@ function DashboardPage() {
                 <Td right>{money(totals.ly)}</Td>
                 <Td right>{money(totals.target)}</Td>
                 <Td right>{money(totals.actual)}</Td>
-                <Td right className={varClass(totals.varSales)}>{money(totals.varSales)}</Td>
+                <Td right className={varClass(wtd.varSales)}>{money(wtd.varSales)}</Td>
                 <Td right>{money(lyAvgTotal)}</Td>
                 <Td right>{money(actAvgTotal)}</Td>
                 <Td right>{num(totals.lyCust)}</Td>
