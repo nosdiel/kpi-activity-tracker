@@ -99,7 +99,8 @@ function TrackableItemsPage() {
   const menuQ = useQuery({
     queryKey: ["pos-menu-items", form.location_id],
     queryFn: () => listMenuItems({ data: { location_id: form.location_id } }),
-    enabled: open && !!form.location_id,
+    enabled: false,
+    retry: false,
     staleTime: 5 * 60_000,
   });
   const menuItems = menuQ.data?.items ?? [];
@@ -285,12 +286,12 @@ function TrackableItemsPage() {
                       variant="outline"
                       role="combobox"
                       className="w-full justify-between font-normal"
-                      disabled={menuQ.isLoading}
+                      disabled={menuQ.isFetching && menuItems.length === 0}
                     >
                       <span className="truncate">
-                        {menuQ.isLoading
+                        {menuQ.isFetching && menuItems.length === 0
                           ? "Loading menu items..."
-                          : form.pos_product || "Select a POS menu item..."}
+                          : form.pos_product || (menuQ.data || menuQ.error ? "Select a POS menu item..." : "Refresh menu to load POS items...")}
                       </span>
                       <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
                     </Button>
@@ -304,6 +305,8 @@ function TrackableItemsPage() {
                             ? `Error: ${(menuQ.error as Error).message}`
                             : menuQ.data?.error
                             ? `Error: ${menuQ.data.error}`
+                            : !menuQ.data
+                            ? "Click Refresh menu to load POS items."
                             : menuItems.length === 0
                             ? "No menu items found for this location."
                             : "No match."}
