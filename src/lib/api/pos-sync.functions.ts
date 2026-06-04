@@ -484,15 +484,13 @@ export const backfillActualSales = createServerFn({ method: "POST" })
     let updated = 0;
     let scanned = 0;
     const pageSize = 500;
-    let from = 0;
     for (;;) {
       const { data, error } = await supabaseAdmin
         .from("daily_sales")
         .select("location_id,business_date,total_cents,actual_sales")
         .not("total_cents", "is", null)
-        .gt("total_cents", 0)
         .or("actual_sales.is.null,actual_sales.eq.0")
-        .range(from, from + pageSize - 1);
+        .range(0, pageSize - 1);
       if (error) throw new Error(error.message);
       const rows = data ?? [];
       if (rows.length === 0) break;
@@ -509,7 +507,6 @@ export const backfillActualSales = createServerFn({ method: "POST" })
         updated += 1;
       }
       if (rows.length < pageSize) break;
-      from += pageSize;
     }
     return { ok: true, scanned, updated };
   });

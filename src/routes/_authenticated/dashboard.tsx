@@ -31,6 +31,7 @@ type FY = { fiscal_year: number; start_date: string };
 type DailySale = {
   business_date: string;
   actual_sales: number | null;
+  total_cents: number | null;
   actual_customer_count: number | null;
   last_year_sales: number | null;
   last_year_customer_count: number | null;
@@ -46,6 +47,11 @@ const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const num = (n: number) => n.toLocaleString("en-US");
 const num0 = (n: number | null | undefined) => num(Number(n ?? 0));
+const actualSalesValue = (row?: { actual_sales: number | null; total_cents?: number | null }) => {
+  const actual = Number(row?.actual_sales ?? 0);
+  const totalCents = row?.total_cents == null ? null : Number(row.total_cents);
+  return actual === 0 && totalCents !== null && totalCents > 0 ? totalCents / 100 : actual;
+};
 
 function DashboardPage() {
   const [locationId, setLocationId] = useState<string>("");
@@ -123,7 +129,7 @@ function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_sales")
-        .select("business_date,actual_sales,actual_customer_count,last_year_sales,last_year_customer_count,dessert_count")
+        .select("business_date,actual_sales,total_cents,actual_customer_count,last_year_sales,last_year_customer_count,dessert_count")
         .eq("location_id", locationId)
         .gte("business_date", dates[0])
         .lte("business_date", dates[6]);
@@ -138,12 +144,12 @@ function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_sales")
-        .select("business_date,actual_sales,actual_customer_count")
+        .select("business_date,actual_sales,total_cents,actual_customer_count")
         .eq("location_id", locationId)
         .gte("business_date", lyDates[0])
         .lte("business_date", lyDates[6]);
       if (error) throw error;
-      return (data ?? []) as { business_date: string; actual_sales: number | null; actual_customer_count: number | null }[];
+      return (data ?? []) as { business_date: string; actual_sales: number | null; total_cents: number | null; actual_customer_count: number | null }[];
     },
   });
 
@@ -191,9 +197,9 @@ function DashboardPage() {
   }, [salesQ.data]);
 
   const lyByDate = useMemo(() => {
-    const m = new Map<string, { actual_sales: number | null; actual_customer_count: number | null }>();
+    const m = new Map<string, { actual_sales: number | null; total_cents: number | null; actual_customer_count: number | null }>();
     (lySalesQ.data ?? []).forEach((r) =>
-      m.set(r.business_date, { actual_sales: r.actual_sales, actual_customer_count: r.actual_customer_count }),
+      m.set(r.business_date, { actual_sales: r.actual_sales, total_cents: r.total_cents, actual_customer_count: r.actual_customer_count }),
     );
     return m;
   }, [lySalesQ.data]);
@@ -214,9 +220,9 @@ function DashboardPage() {
     const s = byDate.get(d);
     const lyRow = lyByDate.get(lyDates[i]);
     // Prefer actual sales from same weekday last year; fall back to stored last_year_sales.
-    const ly = Number(lyRow?.actual_sales ?? s?.last_year_sales ?? 0);
+    const ly = lyRow ? actualSalesValue(lyRow) : Number(s?.last_year_sales ?? 0);
     const lyCust = Number(lyRow?.actual_customer_count ?? s?.last_year_customer_count ?? 0);
-    const actual = Number(s?.actual_sales ?? 0);
+    const actual = actualSalesValue(s);
     const cust = Number(s?.actual_customer_count ?? 0);
     const target = ly * (1 + targetPct);
     const varSales = actual - target;
