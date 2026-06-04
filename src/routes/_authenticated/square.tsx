@@ -105,6 +105,14 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const backfillMut = useMutation({
+    mutationFn: async () => backfillFn() as Promise<{ scanned: number; updated: number }>,
+    onSuccess: (res) => {
+      toast.success(`Backfilled ${res.updated} row(s) (scanned ${res.scanned})`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const title = source === "square" ? "Square Sync" : "Toast Sync";
   const idLabel = source === "square" ? "Square Location ID" : "Toast Restaurant GUID";
   const rows = (locsQ.data ?? []).filter(
