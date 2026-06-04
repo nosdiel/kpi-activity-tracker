@@ -94,6 +94,17 @@ function TrackableItemsPage() {
     return m;
   }, [locationsQ.data]);
 
+  const listMenuItems = useServerFn(listPosMenuItems);
+  const [posOpen, setPosOpen] = useState(false);
+  const menuQ = useQuery({
+    queryKey: ["pos-menu-items", form.location_id],
+    queryFn: () => listMenuItems({ data: { location_id: form.location_id } }),
+    enabled: open && !!form.location_id,
+    staleTime: 5 * 60_000,
+  });
+  const menuItems = menuQ.data?.items ?? [];
+
+
   const saveMut = useMutation({
     mutationFn: async (f: FormState) => {
       const name = f.name.trim();
