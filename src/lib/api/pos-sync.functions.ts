@@ -906,7 +906,7 @@ async function fetchToastMenuItemsForDay(
     throw new Error(`Toast menu report: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
   }
 
-  const deadline = Date.now() + 60_000;
+  const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     const getRes = await fetch(`${base}/era/v1/menu/${reportRequestGuid}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -920,7 +920,7 @@ async function fetchToastMenuItemsForDay(
     if (getRes.status !== 202 && getRes.status !== 204) {
       throw new Error(`Toast menu report get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`);
     }
-    await new Promise((r) => setTimeout(r, 1500));
+    await new Promise((r) => setTimeout(r, 600));
   }
   throw new Error("Toast menu report: not ready in time");
 }
@@ -935,9 +935,10 @@ async function fetchToastMenuItems(
       `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
     );
 
-  // Pull the last 14 days, one report per day, in parallel. Skip today (often not yet closed).
+  // Pull a small recent window (3 days) in parallel — menus rarely change, so this
+  // is plenty to populate the catalog and keeps refresh fast. Skip today (often not yet closed).
   const days: number[] = [];
-  for (let i = 1; i <= 14; i++) {
+  for (let i = 1; i <= 3; i++) {
     const d = new Date();
     d.setUTCDate(d.getUTCDate() - i);
     days.push(toCompact(d));
