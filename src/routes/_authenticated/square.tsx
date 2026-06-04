@@ -203,6 +203,13 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
             >
               {backfillMut.isPending ? "Backfilling..." : "Backfill actual_sales"}
             </Button>
+            <Button
+              variant="secondary"
+              onClick={() => backfillRangeMut.mutate()}
+              disabled={backfillRangeMut.isPending}
+            >
+              {backfillRangeMut.isPending ? "Backfilling 365 days..." : "Backfill last 365 days"}
+            </Button>
             <p className="text-xs text-muted-foreground">
               Only locations with complete credentials are synced.
             </p>
