@@ -39,8 +39,9 @@ async function upsertDailySales(
   total_cents: number,
   source: "square" | "toast"
 ) {
+  const actual_sales = Math.round(total_cents) / 100;
   const { error } = await supabaseAdmin.from("daily_sales").upsert(
-    { location_id, business_date, total_cents, source },
+    { location_id, business_date, total_cents, actual_sales, source },
     { onConflict: "location_id,business_date" }
   );
   if (error) throw new Error(`daily_sales upsert: ${error.message}`);
