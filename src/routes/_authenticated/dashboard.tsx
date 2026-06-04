@@ -12,8 +12,13 @@ import {
   quarterForPeriod,
   weekDates,
   currentFiscalWeek,
-  DAY_NAMES,
 } from "@/lib/fiscal";
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+function dayNameFromISO(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return DAY_NAMES[d.getUTCDay()];
+}
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
