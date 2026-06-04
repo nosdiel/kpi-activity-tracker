@@ -110,16 +110,23 @@ function DashboardPage() {
     [fyRow, week],
   );
 
-  // Same physical week last year = each date minus 364 days (preserves weekday).
+  // Last year = same fiscal week + same weekday (prev fiscal year), fallback to -364 days.
+  const prevFyRow = useMemo(
+    () => fyQ.data?.find((r) => r.fiscal_year === (fy ?? 0) - 1) ?? null,
+    [fyQ.data, fy],
+  );
   const lyDates = useMemo(
-    () =>
-      dates.map((d) => {
+    () => {
+      if (prevFyRow && week) return weekDates(prevFyRow.start_date, week);
+      return dates.map((d) => {
         const dt = new Date(`${d}T00:00:00Z`);
         dt.setUTCDate(dt.getUTCDate() - 364);
         return dt.toISOString().slice(0, 10);
-      }),
-    [dates],
+      });
+    },
+    [prevFyRow, week, dates],
   );
+
 
   const monthStart = dates[0]?.slice(0, 7);
 
