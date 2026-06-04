@@ -1008,7 +1008,88 @@ export const listPosMenuItems = createServerFn({ method: "POST" })
     }
   });
 
+// Returns per-day quantity sold across all active trackable items at a location,
+// pulled from Toast Analytics (per-day) for the requested business dates.
+export const getTrackableItemDailyQuantity = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({
+      location_id: z.string().uuid(),
+      dates: z.array(z.string().regex(/^\d{4}-\d{2}-\d{2}$/)).min(1).max(31),
+    }).parse(input)
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
+    // Load active trackable items in date range with a POS mapping.
+    const minDate = data.dates.reduce((a, b) => (a < b ? a : b));
+    const maxDate = data.dates.reduce((a, b) => (a > b ? a : b));
+    const { data: items, error: itemsErr } = await supabaseAdmin
+      .from("trackable_items")
+      .select("id,name,pos_product,active_from,active_to")
+      .eq("location_id", data.location_id)
+      .not("pos_product", "is", null);
+    if (itemsErr) return { byDate: {} as Record<string, number>, items: [] as { id: string; name: string }[], error: itemsErr.message };
 
+    const active = (items ?? []).filter((it: any) => {
+      if (it.active_from && it.active_from > maxDate) return false;
+      if (it.active_to && it.active_to < minDate) return false;
+      return true;
+    });
+    if (active.length === 0) {
+      return { byDate: {} as Record<string, number>, items: [] as { id: string; name: string }[], error: null as string | null };
+    }
+    const mappedNames = new Set(active.map((it: any) => String(it.pos_product).trim().toLowerCase()));
 
+    // Load location credentials.
+    const baseColumns =
+      "id,pos_provider,toast_restaurant_guid,toast_client_id,toast_client_secret";
+    const extendedColumns = `${baseColumns},toast_api_url`;
+    let locRes = await supabaseAdmin.from("locations").select(extendedColumns).eq("id", data.location_id).maybeSingle();
+    if (locRes.error && isMissingToastMetadataColumn(locRes.error)) {
+      locRes = await supabaseAdmin.from("locations").select(baseColumns).eq("id", data.location_id).maybeSingle();
+    }
+    if (locRes.error) return { byDate: {} as Record<string, number>, items: [] as { id: string; name: string }[], error: locRes.error.message };
+    const loc = locRes.data as any;
+    if (!loc?.toast_client_id || !loc?.toast_client_secret || !loc?.toast_restaurant_guid) {
+      return { byDate: {} as Record<string, number>, items: active.map((it: any) => ({ id: it.id, name: it.name })), error: "Toast credentials missing for this location" };
+    }
+
+    try {
+      const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
+      const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+
+      const results = await Promise.allSettled(
+        data.dates.map(async (iso) => {
+          const compact = Number(iso.replace(/-/g, ""));
+          const rows = await fetchToastMenuItemsForDay(base, token, loc.toast_restaurant_guid, compact);
+          let qty = 0;
+          for (const row of rows as any[]) {
+            const name = String(row?.menuItemName ?? "").trim().toLowerCase();
+            if (!name || !mappedNames.has(name)) continue;
+            qty += Number(row?.quantitySold ?? 0);
+          }
+          return { iso, qty };
+        })
+      );
+
+      const byDate: Record<string, number> = {};
+      let lastErr = "";
+      for (const r of results) {
+        if (r.status === "fulfilled") byDate[r.value.iso] = r.value.qty;
+        else lastErr = (r.reason as Error)?.message ?? String(r.reason);
+      }
+      return {
+        byDate,
+        items: active.map((it: any) => ({ id: it.id, name: it.name })),
+        error: Object.keys(byDate).length === 0 && lastErr ? lastErr : null,
+      };
+    } catch (e) {
+      return {
+        byDate: {} as Record<string, number>,
+        items: active.map((it: any) => ({ id: it.id, name: it.name })),
+        error: (e as Error).message,
+      };
+    }
+  });
 
