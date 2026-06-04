@@ -661,8 +661,8 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         }
       }
 
-      for (let i = 1; i <= days; i++) {
-        const businessDate = isoDaysAgo(i);
+      for (const businessDate of dateList) {
+
         processed += 1;
         if (have.has(`${loc.id}|${businessDate}`)) continue;
         try {
