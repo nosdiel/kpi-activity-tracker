@@ -597,7 +597,7 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
     if (locIds.length > 0) {
       const { data: existing, error: exErr } = await supabaseAdmin
         .from("daily_sales")
-        .select("location_id,business_date,actual_sales")
+        .select("location_id,business_date,actual_sales,actual_customer_count")
         .in("location_id", locIds)
         .gte("business_date", startDate)
         .lte("business_date", endDate);
@@ -606,8 +606,13 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         location_id: string;
         business_date: string;
         actual_sales: number | null;
+        actual_customer_count: number | null;
       }>) {
-        if (r.actual_sales && r.actual_sales > 0) have.add(`${r.location_id}|${r.business_date}`);
+        // Only skip dates that already have BOTH sales and customer count populated;
+        // otherwise re-fetch so the customer count column gets backfilled.
+        if (r.actual_sales && r.actual_sales > 0 && r.actual_customer_count && r.actual_customer_count > 0) {
+          have.add(`${r.location_id}|${r.business_date}`);
+        }
       }
     }
 
