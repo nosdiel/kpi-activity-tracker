@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-  periodWeekRange,
   periodForWeek,
-  quarterForPeriod,
+  quarterForWeek,
+  quarterWeekRange,
+  shiftISODate,
   weekDates,
   currentFiscalWeek,
 } from "@/lib/fiscal";
@@ -53,6 +54,16 @@ const pctFmt = (n: number) => `${(n * 100).toFixed(2)}%`;
 const parseNum = (s: string) => {
   const n = parseFloat(s.replace(/[^0-9.\-]/g, ""));
   return Number.isFinite(n) ? n : 0;
+};
+const withFY2027 = (rows: FY[] = []) => {
+  if (rows.some((r) => r.fiscal_year === 2027)) return rows;
+  const fy2026 = rows.find((r) => r.fiscal_year === 2026);
+  const start_date = fy2026 ? shiftISODate(fy2026.start_date, 364) : "2026-12-27";
+  return [{ fiscal_year: 2027, start_date }, ...rows].sort((a, b) => b.fiscal_year - a.fiscal_year);
+};
+const defaultFiscalYear = (rows: FY[]) => {
+  const today = new Date().toISOString().slice(0, 10);
+  return rows.find((r) => r.start_date <= today) ?? rows[0];
 };
 
 // Merge stored vendor list with defaults so defaults always appear (unless explicitly removed).
@@ -127,17 +138,20 @@ function WeeklyPnlPage() {
     if (!locationId && locationsQ.data?.[0]) setLocationId(locationsQ.data[0].id);
   }, [locationsQ.data, locationId]);
   useEffect(() => {
-    if (fy === null && fyQ.data?.[0]) {
-      setFy(fyQ.data[0].fiscal_year);
-      const cur = currentFiscalWeek(fyQ.data[0].start_date);
+    const years = withFY2027(fyQ.data ?? []);
+    if (fy === null && years[0]) {
+      const latest = defaultFiscalYear(years);
+      setFy(latest.fiscal_year);
+      const cur = currentFiscalWeek(latest.start_date);
       setWeek(cur > 1 ? cur - 1 : cur);
     }
   }, [fyQ.data, fy]);
 
-  const fyRow = useMemo(() => fyQ.data?.find((r) => r.fiscal_year === fy) ?? null, [fyQ.data, fy]);
+  const fiscalYears = useMemo(() => withFY2027(fyQ.data ?? []), [fyQ.data]);
+  const fyRow = useMemo(() => fiscalYears.find((r) => r.fiscal_year === fy) ?? null, [fiscalYears, fy]);
   const period = week ? periodForWeek(week) : 1;
-  const quarter = quarterForPeriod(period);
-  const periodRange = periodWeekRange(period);
+  const quarter = week ? quarterForWeek(week) : 1;
+  const quarterRange = quarterWeekRange(quarter);
   const dates = useMemo(() => (fyRow && week ? weekDates(fyRow.start_date, week) : []), [fyRow, week]);
 
   // Weekly P&L row
@@ -285,7 +299,7 @@ function WeeklyPnlPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Weekly P&L</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {locName} · FY{fy ?? "—"} · Period {period} · Week {week ?? "—"}
+            {locName} · FY{fy ?? "—"} · Q{quarter} · Week {week ?? "—"}
           </p>
         </div>
         <div className="flex gap-2" data-print-actions>
@@ -315,21 +329,21 @@ function WeeklyPnlPage() {
             <Select value={fy?.toString() ?? ""} onValueChange={(v) => setFy(Number(v))}>
               <SelectTrigger><SelectValue placeholder="FY" /></SelectTrigger>
               <SelectContent>
-                {(fyQ.data ?? []).map((y) => (
+                {fiscalYears.map((y) => (
                   <SelectItem key={y.fiscal_year} value={String(y.fiscal_year)}>FY {y.fiscal_year}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Fiscal Period">
-            <Select value={String(period)} onValueChange={(v) => setWeek(periodWeekRange(Number(v)).start)}>
+          <Field label="Fiscal Quarter">
+            <Select value={String(quarter)} onValueChange={(v) => setWeek(quarterWeekRange(Number(v)).start)}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Array.from({ length: 13 }, (_, i) => i + 1).map((p) => {
-                  const r = periodWeekRange(p);
+                {Array.from({ length: 4 }, (_, i) => i + 1).map((q) => {
+                  const r = quarterWeekRange(q);
                   return (
-                    <SelectItem key={p} value={String(p)}>
-                      P{p} (Q{quarterForPeriod(p)}, wk {r.start}–{r.end})
+                    <SelectItem key={q} value={String(q)}>
+                      Q{q} (Weeks {r.start}–{r.end})
                     </SelectItem>
                   );
                 })}
@@ -340,7 +354,7 @@ function WeeklyPnlPage() {
             <Select value={week?.toString() ?? ""} onValueChange={(v) => setWeek(Number(v))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Array.from({ length: periodRange.end - periodRange.start + 1 }, (_, i) => periodRange.start + i).map((w) => {
+                {Array.from({ length: quarterRange.end - quarterRange.start + 1 }, (_, i) => quarterRange.start + i).map((w) => {
                   const wd = fyRow ? weekDates(fyRow.start_date, w) : [];
                   const fmt = (iso: string) => {
                     const d = new Date(`${iso}T00:00:00Z`);

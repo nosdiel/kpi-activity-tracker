@@ -243,48 +243,59 @@ async function toastAccessTokenWithBase(
   return tok;
 }
 
-async function toastDayTotalWithBase(
+type ToastMetricsRow = {
+  businessDate?: string | number;
+  netSalesAmount?: number;
+  grossSalesAmount?: number;
+  guestCount?: number;
+  ordersCount?: number;
+  closedOrdersCount?: number;
+};
+
+function compactBusinessDate(iso: string) {
+  return Number(iso.replace(/-/g, ""));
+}
+
+function isoFromToastBusinessDate(value: string | number | undefined) {
+  const compact = String(value ?? "");
+  return /^\d{8}$/.test(compact) ? `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}` : "";
+}
+
+async function fetchToastMetricsRows(
   base: string,
   accessToken: string,
   restaurantGuid: string,
-  businessDate: string
-): Promise<{ totalCents: number; customerCount: number }> {
-  // Toast Analytics API (async): POST a report request, then poll for results.
-  // Docs: https://doc.toasttab.com/doc/devguide/apiAnalyticsMetricsReportingDataCreateRequest.html
-  const compact = Number(businessDate.replace(/-/g, "")); // YYYYMMDD integer
-
-  // 1) Create the report request for a single day, with 429 retry/backoff.
+  startDate: string,
+  endDate: string
+): Promise<ToastMetricsRow[]> {
+  const startCompact = compactBusinessDate(startDate);
+  const endCompact = compactBusinessDate(endDate);
   let createRes: Response | null = null;
-  {
-    let attempt = 0;
-    for (;;) {
-      createRes = await fetch(`${base}/era/v1/metrics/day`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          startBusinessDate: compact,
-          endBusinessDate: compact,
-          restaurantIds: [restaurantGuid],
-          excludedRestaurantIds: [],
-        }),
-      });
-      if (createRes.status !== 429 || attempt >= 5) break;
-      const ra = Number(createRes.headers.get("retry-after"));
-      const waitMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(30_000, 2000 * 2 ** attempt);
-      await new Promise((r) => setTimeout(r, waitMs));
-      attempt += 1;
-    }
+  let attempt = 0;
+  for (;;) {
+    createRes = await fetch(`${base}/era/v1/metrics/year`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        startBusinessDate: startCompact,
+        endBusinessDate: endCompact,
+        restaurantIds: [restaurantGuid],
+        excludedRestaurantIds: [],
+        groupBy: [],
+      }),
+    });
+    if (createRes.status !== 429 || attempt >= 5) break;
+    const ra = Number(createRes.headers.get("retry-after"));
+    const waitMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(30_000, 2000 * 2 ** attempt);
+    await new Promise((r) => setTimeout(r, waitMs));
+    attempt += 1;
   }
   if (!createRes!.ok) {
-    throw new Error(
-      `Toast analytics create ${createRes!.status}: ${(await createRes!.text()).slice(0, 240)}`
-    );
+    throw new Error(`Toast analytics create ${createRes!.status}: ${(await createRes!.text()).slice(0, 240)}`);
   }
-
-  // Response is a JSON string containing the reportRequestGuid.
   const createdRaw = await createRes.text();
   let reportRequestGuid = "";
   try {
@@ -293,21 +304,9 @@ async function toastDayTotalWithBase(
   } catch {
     reportRequestGuid = createdRaw.replace(/^"|"$/g, "");
   }
-  if (!reportRequestGuid) {
-    throw new Error(`Toast analytics: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
-  }
+  if (!reportRequestGuid) throw new Error(`Toast analytics: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
 
-  // 2) Poll for results. Analytics jobs are async; small datasets return quickly.
-  const deadline = Date.now() + 60_000;
-  let rows:
-    | Array<{
-        netSalesAmount?: number;
-        grossSalesAmount?: number;
-        guestCount?: number;
-        ordersCount?: number;
-        closedOrdersCount?: number;
-      }>
-    | null = null;
+  const deadline = Date.now() + 90_000;
   let lastStatus = 0;
   let lastBody = "";
   while (Date.now() < deadline) {
@@ -316,32 +315,19 @@ async function toastDayTotalWithBase(
     });
     lastStatus = getRes.status;
     if (getRes.status === 200) {
-      const ct = getRes.headers.get("content-type") || "";
-      if (ct.includes("application/json")) {
-        const body = await getRes.json();
-        if (Array.isArray(body)) {
-          rows = body;
-          break;
-        }
-      } else {
-        lastBody = (await getRes.text()).slice(0, 200);
-      }
+      const body = await getRes.json();
+      if (Array.isArray(body)) return body as ToastMetricsRow[];
     } else if (getRes.status === 202 || getRes.status === 204) {
       lastBody = (await getRes.text()).slice(0, 200);
     } else {
-      throw new Error(
-        `Toast analytics get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`
-      );
+      throw new Error(`Toast analytics get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`);
     }
     await new Promise((r) => setTimeout(r, 1500));
   }
-  if (!rows) {
-    throw new Error(
-      `Toast analytics: report not ready in time (last status ${lastStatus}${lastBody ? `: ${lastBody}` : ""})`
-    );
-  }
+  throw new Error(`Toast analytics: report not ready in time (last status ${lastStatus}${lastBody ? `: ${lastBody}` : ""})`);
+}
 
-  // 3) Sum net sales and customer count across returned rows.
+function toastTotalsFromRows(rows: ToastMetricsRow[]) {
   let totalCents = 0;
   let customerCount = 0;
   for (const row of rows) {
@@ -353,6 +339,16 @@ async function toastDayTotalWithBase(
     if (Number.isFinite(guests)) customerCount += Math.round(guests);
   }
   return { totalCents, customerCount };
+}
+
+async function toastDayTotalWithBase(
+  base: string,
+  accessToken: string,
+  restaurantGuid: string,
+  businessDate: string
+): Promise<{ totalCents: number; customerCount: number }> {
+  const rows = await fetchToastMetricsRows(base, accessToken, restaurantGuid, businessDate, businessDate);
+  return toastTotalsFromRows(rows);
 }
 
 
@@ -575,6 +571,30 @@ function currentWeekDatesLastYear(): string[] {
   });
 }
 
+function daysBetweenISO(startISO: string, endISO: string): number {
+  const start = new Date(`${startISO}T00:00:00Z`).getTime();
+  const end = new Date(`${endISO}T00:00:00Z`).getTime();
+  return Math.floor((end - start) / 86_400_000);
+}
+
+function chunkDatesByMaxSpan(dates: string[], maxInclusiveDays = 366): string[][] {
+  const sorted = Array.from(new Set(dates)).sort();
+  const chunks: string[][] = [];
+  let current: string[] = [];
+  let start = "";
+  for (const date of sorted) {
+    if (!start || daysBetweenISO(start, date) + 1 > maxInclusiveDays) {
+      if (current.length) chunks.push(current);
+      current = [date];
+      start = date;
+    } else {
+      current.push(date);
+    }
+  }
+  if (current.length) chunks.push(current);
+  return chunks;
+}
+
 // Pull historical daily sales from POS for the last N days (default 365).
 // Skips days that already have actual_sales and actual_customer_count populated so repeat runs are cheap.
 export const backfillSalesRange = createServerFn({ method: "POST" })
@@ -689,27 +709,51 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         }
       }
 
+      if (source === "toast") {
+        processed += dateList.length;
+        const neededDates = dateList.filter((businessDate) => !have.has(`${loc.id}|${businessDate}`)).sort();
+        const neededSet = new Set(neededDates);
+        for (const chunk of chunkDatesByMaxSpan(neededDates)) {
+          try {
+            const rows = await fetchToastMetricsRows(
+              toastBase,
+              toastToken!,
+              loc.toast_restaurant_guid,
+              chunk[0],
+              chunk[chunk.length - 1]
+            );
+            const rowsByDate = new Map<string, ToastMetricsRow[]>();
+            for (const row of rows) {
+              const businessDate = isoFromToastBusinessDate(row.businessDate);
+              if (!businessDate || !neededSet.has(businessDate)) continue;
+              rowsByDate.set(businessDate, [...(rowsByDate.get(businessDate) ?? []), row]);
+            }
+            for (const [businessDate, dayRows] of rowsByDate) {
+              const { totalCents, customerCount } = toastTotalsFromRows(dayRows);
+              await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, source, customerCount);
+              inserted += 1;
+            }
+          } catch (e) {
+            errors.push({
+              location_id: loc.id,
+              business_date: `${chunk[0]}..${chunk[chunk.length - 1]}`,
+              message: (e as Error).message,
+            });
+          }
+        }
+        continue;
+      }
+
       for (const businessDate of dateList) {
 
         processed += 1;
         if (have.has(`${loc.id}|${businessDate}`)) continue;
         try {
-          let totalCents = 0;
-          let customerCount = 0;
-          if (source === "square") {
-            ({ totalCents, customerCount } = await squareDayTotal(
-              loc.square_access_token,
-              loc.square_location_id,
-              businessDate
-            ));
-          } else {
-            ({ totalCents, customerCount } = await toastDayTotalWithBase(
-              toastBase,
-              toastToken!,
-              loc.toast_restaurant_guid,
-              businessDate
-            ));
-          }
+          const { totalCents, customerCount } = await squareDayTotal(
+            loc.square_access_token,
+            loc.square_location_id,
+            businessDate
+          );
           await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, source, customerCount);
           inserted += 1;
         } catch (e) {
@@ -719,9 +763,6 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
             message: (e as Error).message,
           });
         }
-        // Pace requests to stay under POS rate limits (Toast analytics ~5 req/sec).
-        if (source === "toast") await new Promise((r) => setTimeout(r, 350));
-
       }
     }
 

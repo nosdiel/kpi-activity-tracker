@@ -7,9 +7,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  periodWeekRange,
-  periodForWeek,
-  quarterForPeriod,
+  quarterForWeek,
+  quarterWeekRange,
+  shiftISODate,
   weekDates,
   currentFiscalWeek,
 } from "@/lib/fiscal";
@@ -52,6 +52,16 @@ const actualSalesValue = (row?: { actual_sales: number | null; total_cents?: num
   const totalCents = row?.total_cents == null ? null : Number(row.total_cents);
   return actual === 0 && totalCents !== null && totalCents > 0 ? totalCents / 100 : actual;
 };
+const withFY2027 = (rows: FY[] = []) => {
+  if (rows.some((r) => r.fiscal_year === 2027)) return rows;
+  const fy2026 = rows.find((r) => r.fiscal_year === 2026);
+  const start_date = fy2026 ? shiftISODate(fy2026.start_date, 364) : "2026-12-27";
+  return [{ fiscal_year: 2027, start_date }, ...rows].sort((a, b) => b.fiscal_year - a.fiscal_year);
+};
+const defaultFiscalYear = (rows: FY[]) => {
+  const today = new Date().toISOString().slice(0, 10);
+  return rows.find((r) => r.start_date <= today) ?? rows[0];
+};
 
 function DashboardPage() {
   const [locationId, setLocationId] = useState<string>("");
@@ -89,21 +99,23 @@ function DashboardPage() {
   }, [locationsQ.data, locationId]);
 
   useEffect(() => {
-    if (fy === null && fyQ.data && fyQ.data.length > 0) {
-      const latest = fyQ.data[0];
+    const years = withFY2027(fyQ.data ?? []);
+    if (fy === null && years.length > 0) {
+      const latest = defaultFiscalYear(years);
       setFy(latest.fiscal_year);
       setWeek(currentFiscalWeek(latest.start_date));
     }
   }, [fyQ.data, fy]);
 
+  const fiscalYears = useMemo(() => withFY2027(fyQ.data ?? []), [fyQ.data]);
+
   const fyRow = useMemo(
-    () => fyQ.data?.find((r) => r.fiscal_year === fy) ?? null,
-    [fyQ.data, fy],
+    () => fiscalYears.find((r) => r.fiscal_year === fy) ?? null,
+    [fiscalYears, fy],
   );
 
-  const period = week ? periodForWeek(week) : 1;
-  const quarter = quarterForPeriod(period);
-  const periodRange = periodWeekRange(period);
+  const quarter = week ? quarterForWeek(week) : 1;
+  const quarterRange = quarterWeekRange(quarter);
 
   const dates = useMemo(
     () => (fyRow && week ? weekDates(fyRow.start_date, week) : []),
@@ -112,8 +124,8 @@ function DashboardPage() {
 
   // Last year = same fiscal week + same weekday (prev fiscal year), fallback to -364 days.
   const prevFyRow = useMemo(
-    () => fyQ.data?.find((r) => r.fiscal_year === (fy ?? 0) - 1) ?? null,
-    [fyQ.data, fy],
+    () => fiscalYears.find((r) => r.fiscal_year === (fy ?? 0) - 1) ?? null,
+    [fiscalYears, fy],
   );
   const lyDates = useMemo(
     () => {
@@ -266,7 +278,7 @@ function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Daily Sales Activity</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {locName} · FY{fy ?? "—"} · Period {period} · Week {week ?? "—"}
+            {locName} · FY{fy ?? "—"} · Q{quarter} · Week {week ?? "—"}
           </p>
         </div>
         <div className="flex gap-2">
@@ -295,24 +307,24 @@ function DashboardPage() {
             <Select value={fy?.toString() ?? ""} onValueChange={(v) => setFy(Number(v))}>
               <SelectTrigger><SelectValue placeholder="FY" /></SelectTrigger>
               <SelectContent>
-                {(fyQ.data ?? []).map((y) => (
+                {fiscalYears.map((y) => (
                   <SelectItem key={y.fiscal_year} value={String(y.fiscal_year)}>FY {y.fiscal_year}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Fiscal Period">
-            <Select value={String(period)} onValueChange={(v) => {
-              const p = Number(v);
-              setWeek(periodWeekRange(p).start);
+          <Field label="Fiscal Quarter">
+            <Select value={String(quarter)} onValueChange={(v) => {
+              const q = Number(v);
+              setWeek(quarterWeekRange(q).start);
             }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Array.from({ length: 13 }, (_, i) => i + 1).map((p) => {
-                  const r = periodWeekRange(p);
+                {Array.from({ length: 4 }, (_, i) => i + 1).map((q) => {
+                  const r = quarterWeekRange(q);
                   return (
-                    <SelectItem key={p} value={String(p)}>
-                      P{p} (Q{quarterForPeriod(p)}, wk {r.start}–{r.end})
+                    <SelectItem key={q} value={String(q)}>
+                      Q{q} (Weeks {r.start}–{r.end})
                     </SelectItem>
                   );
                 })}
@@ -323,7 +335,7 @@ function DashboardPage() {
             <Select value={week?.toString() ?? ""} onValueChange={(v) => setWeek(Number(v))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Array.from({ length: periodRange.end - periodRange.start + 1 }, (_, i) => periodRange.start + i).map((w) => {
+                {Array.from({ length: quarterRange.end - quarterRange.start + 1 }, (_, i) => quarterRange.start + i).map((w) => {
                   const wd = fyRow ? weekDates(fyRow.start_date, w) : [];
                   const fmt = (iso: string) => {
                     const d = new Date(`${iso}T00:00:00Z`);
