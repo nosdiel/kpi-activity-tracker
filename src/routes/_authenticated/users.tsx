@@ -41,6 +41,9 @@ function UsersPage() {
   const setRoleFn = useServerFn(setUserRole);
   const deleteFn = useServerFn(deleteUser);
   const listFn = useServerFn(listUsers);
+  const passwordFn = useServerFn(setUserPassword);
+  const [pwTarget, setPwTarget] = useState<{ id: string; label: string } | null>(null);
+  const [pwValue, setPwValue] = useState("");
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
