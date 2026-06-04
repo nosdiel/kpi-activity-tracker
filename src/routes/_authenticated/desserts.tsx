@@ -197,6 +197,22 @@ function TrackableItemsPage() {
     }
   };
 
+  // Auto-start Toast report when the dialog has loaded an empty cache for this location.
+  const autoStartedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || !form.location_id) return;
+    const d = menuQ.data;
+    if (!d || d.provider !== "toast") return;
+    if (d.status !== "not_started" && !(d.status === "ready" && d.items.length === 0)) return;
+    const key = `${form.location_id}:${d.status}`;
+    if (autoStartedRef.current === key) return;
+    autoStartedRef.current = key;
+    handleSync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, form.location_id, menuQ.data?.status, menuQ.data?.provider]);
+
+
+
 
   const saveMut = useMutation({
     mutationFn: async (f: FormState) => {
