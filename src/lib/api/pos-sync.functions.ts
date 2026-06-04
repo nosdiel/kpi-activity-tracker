@@ -991,6 +991,29 @@ function rowsToMenuItems(rows: any[]): MenuItem[] {
   return out;
 }
 
+// Inline create+poll for legacy callers (getTrackableItemDailyQuantity).
+// Kept short-budget so it cannot blow the request timeout.
+async function fetchToastMenuItemsForDayInline(
+  base: string,
+  accessToken: string,
+  restaurantGuid: string,
+  compactDate: number,
+  pollBudgetMs = 8_000
+): Promise<any[]> {
+  const created = await createToastMenuReportRequest(base, accessToken, restaurantGuid, compactDate);
+  if ("error" in created) throw new Error(created.error);
+  if ("rateLimited" in created) throw new Error("Toast rate limit reached, try again later.");
+  const deadline = Date.now() + pollBudgetMs;
+  while (Date.now() < deadline) {
+    const r = await pollToastMenuReportOnce(base, accessToken, created.guid);
+    if ("ready" in r) return r.rows;
+    if ("error" in r) throw new Error(r.error);
+    if ("rateLimited" in r) throw new Error("Toast rate limit reached, try again later.");
+    await new Promise((r2) => setTimeout(r2, 1_000));
+  }
+  throw new Error("Toast menu report: still processing, check again.");
+}
+
 async function loadToastLocation(supabaseAdmin: any, locationId: string) {
   const baseColumns =
     "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret";
