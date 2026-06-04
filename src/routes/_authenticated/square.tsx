@@ -57,6 +57,9 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   const backfillRangeFn = useServerFn(backfillSalesRange);
   const clearErrorsFn = useServerFn(clearSyncErrors);
   const [date, setDate] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
   const [editing, setEditing] = useState<LocStatus | null>(null);
   const [form, setForm] = useState({
     square_location_id: "",
