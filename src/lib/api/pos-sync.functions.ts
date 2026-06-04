@@ -873,91 +873,114 @@ async function fetchSquareMenuItems(accessToken: string): Promise<MenuItem[]> {
 }
 
 // Uses Toast Analytics API Menu Reporting (scope: enterprise-metrics:read).
-// `/era/v1/menu/day` requires startBusinessDate === endBusinessDate, so we
-// run one report per day and merge unique items.
-async function fetchToastMenuItemsForDay(
+// Two-phase, persisted via toast_report_jobs so a single web request never
+// blocks on Toast's async report pipeline.
+
+const MENU_REPORT_TYPE = "MENU_ITEM_DAY";
+const REPORT_FRESH_MS = 60 * 60 * 1000; // 1h — reuse cached "ready" rows
+
+function compactFromIso(iso: string): number {
+  return Number(iso.replace(/-/g, ""));
+}
+
+function yesterdayIsoUtc(): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function backoffSecondsFor(attempt: number): number {
+  if (attempt <= 1) return 30;
+  if (attempt === 2) return 60;
+  return 120;
+}
+
+async function createToastMenuReportRequest(
   base: string,
   accessToken: string,
   restaurantGuid: string,
-  compactDate: number,
-  pollBudgetMs = 10_000
-): Promise<any[]> {
-  let createRes: Response | null = null;
-  let attempt = 0;
-  for (;;) {
-    createRes = await fetchWithTimeout(`${base}/era/v1/menu/day`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        startBusinessDate: compactDate,
-        endBusinessDate: compactDate,
-        restaurantIds: [restaurantGuid],
-        excludedRestaurantIds: [],
-        groupBy: ["MENU_ITEM"],
-      }),
-    }, 5_000);
-    if (createRes.status !== 429 || attempt >= 1) break;
-    const ra = Number(createRes.headers.get("retry-after"));
-    const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 2_000) : 1_000;
-    await new Promise((r) => setTimeout(r, waitMs));
-    attempt += 1;
-  }
-  if (!createRes!.ok) {
-    throw new Error(`Toast menu report create ${createRes!.status}: ${(await createRes!.text()).slice(0, 240)}`);
-  }
-  const createdRaw = await createRes.text();
-  let reportRequestGuid = "";
+  compactDate: number
+): Promise<{ guid: string } | { rateLimited: true; retryAfter: number } | { error: string }> {
+  let res: Response;
   try {
-    const parsed = JSON.parse(createdRaw);
-    reportRequestGuid = typeof parsed === "string" ? parsed : (parsed?.reportRequestGuid ?? "");
+    res = await fetchWithTimeout(
+      `${base}/era/v1/menu/day`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          startBusinessDate: compactDate,
+          endBusinessDate: compactDate,
+          restaurantIds: [restaurantGuid],
+          excludedRestaurantIds: [],
+          groupBy: ["MENU_ITEM"],
+        }),
+      },
+      8_000
+    );
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  if (res.status === 429) {
+    const ra = Number(res.headers.get("retry-after"));
+    return { rateLimited: true, retryAfter: Number.isFinite(ra) && ra > 0 ? ra : 30 };
+  }
+  if (!res.ok) {
+    return { error: `Toast menu report create ${res.status}: ${(await res.text()).slice(0, 240)}` };
+  }
+  const raw = await res.text();
+  let guid = "";
+  try {
+    const parsed = JSON.parse(raw);
+    guid = typeof parsed === "string" ? parsed : (parsed?.reportRequestGuid ?? "");
   } catch {
-    reportRequestGuid = createdRaw.replace(/^"|"$/g, "");
+    guid = raw.replace(/^"|"$/g, "");
   }
-  if (!reportRequestGuid) {
-    throw new Error(`Toast menu report: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
-  }
-
-  const deadline = Date.now() + pollBudgetMs;
-  while (Date.now() < deadline) {
-    const getRes = await fetchWithTimeout(`${base}/era/v1/menu/${reportRequestGuid}`, {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    }, 5_000);
-    if (getRes.status === 200) {
-      const body = await getRes.json();
-      if (Array.isArray(body)) return body;
-      if (Array.isArray((body as any)?.data)) return (body as any).data;
-      return [];
-    }
-    if (getRes.status !== 202 && getRes.status !== 204) {
-      throw new Error(`Toast menu report get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`);
-    }
-    await new Promise((r) => setTimeout(r, 750));
-  }
-  throw new Error("Toast menu report: not ready in time");
+  if (!guid) return { error: `Toast menu report: missing reportRequestGuid (${raw.slice(0, 200)})` };
+  return { guid };
 }
 
-async function fetchToastMenuItems(
+async function pollToastMenuReportOnce(
   base: string,
   accessToken: string,
-  restaurantGuid: string
-): Promise<MenuItem[]> {
-  // Use Toast Analytics API Menu Reporting only (scope: enterprise-metrics:read).
-  // Try the most recent completed business day only. Analytics reports can
-  // take longer than the server request limit, so this path must return fast.
-  const toCompact = (d: Date) =>
-    Number(
-      `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
+  guid: string
+): Promise<
+  | { ready: true; rows: any[] }
+  | { pending: true }
+  | { rateLimited: true; retryAfter: number }
+  | { error: string }
+> {
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(
+      `${base}/era/v1/menu/${guid}`,
+      { headers: { Authorization: `Bearer ${accessToken}` } },
+      8_000
     );
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
-  const day = toCompact(d);
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  if (res.status === 200) {
+    const body = await res.json();
+    if (Array.isArray(body)) return { ready: true, rows: body };
+    if (Array.isArray((body as any)?.data)) return { ready: true, rows: (body as any).data };
+    return { ready: true, rows: [] };
+  }
+  if (res.status === 202 || res.status === 204) return { pending: true };
+  if (res.status === 429) {
+    const ra = Number(res.headers.get("retry-after"));
+    return { rateLimited: true, retryAfter: Number.isFinite(ra) && ra > 0 ? ra : 30 };
+  }
+  return { error: `Toast menu report get ${res.status}: ${(await res.text()).slice(0, 240)}` };
+}
+
+function rowsToMenuItems(rows: any[]): MenuItem[] {
   const out: MenuItem[] = [];
   const seen = new Set<string>();
-  const rows = await fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, day, 6_000);
-  for (const row of rows) {
+  for (const row of rows ?? []) {
     const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
     const name = String(row?.menuItemName ?? "").trim();
     if (!id || !name || seen.has(id)) continue;
@@ -968,8 +991,210 @@ async function fetchToastMenuItems(
   return out;
 }
 
+async function loadToastLocation(supabaseAdmin: any, locationId: string) {
+  const baseColumns =
+    "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret";
+  const extendedColumns = `${baseColumns},toast_api_url`;
+  let r = await supabaseAdmin.from("locations").select(extendedColumns).eq("id", locationId).maybeSingle();
+  if (r.error && isMissingToastMetadataColumn(r.error)) {
+    r = await supabaseAdmin.from("locations").select(baseColumns).eq("id", locationId).maybeSingle();
+  }
+  return r;
+}
 
+// Start (or reuse) an async Toast menu report job for a single (location, date).
+export const startToastMenuReportJob = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({
+      location_id: z.string().uuid(),
+      business_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    }).parse(input)
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const businessDate = data.business_date ?? yesterdayIsoUtc();
 
+    const existing = await supabaseAdmin
+      .from("toast_report_jobs")
+      .select("*")
+      .eq("location_id", data.location_id)
+      .eq("business_date", businessDate)
+      .eq("report_type", MENU_REPORT_TYPE)
+      .maybeSingle();
+    if (existing.error && existing.error.code !== "PGRST116") {
+      return { ok: false as const, error: existing.error.message };
+    }
+    const now = Date.now();
+    if (existing.data) {
+      const ageMs = now - new Date(existing.data.updated_at).getTime();
+      if (existing.data.status === "ready" && ageMs < REPORT_FRESH_MS) {
+        return { ok: true as const, job_id: existing.data.id, status: "ready" as const };
+      }
+      if (existing.data.status === "pending" && existing.data.report_request_guid) {
+        return { ok: true as const, job_id: existing.data.id, status: "pending" as const };
+      }
+      if (existing.data.status === "rate_limited" && new Date(existing.data.next_attempt_at).getTime() > now) {
+        const waitS = Math.ceil((new Date(existing.data.next_attempt_at).getTime() - now) / 1000);
+        return { ok: false as const, error: `Toast rate limit reached, try again in ${waitS}s.` };
+      }
+    }
+
+    const locRes = await loadToastLocation(supabaseAdmin, data.location_id);
+    if (locRes.error) return { ok: false as const, error: locRes.error.message };
+    const loc = locRes.data as any;
+    if (!loc) return { ok: false as const, error: "Location not found" };
+    if (!loc.toast_client_id || !loc.toast_client_secret || !loc.toast_restaurant_guid) {
+      return { ok: false as const, error: "Toast credentials missing for this location" };
+    }
+
+    const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
+    let token: string;
+    try {
+      token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+    } catch (e) {
+      return { ok: false as const, error: (e as Error).message };
+    }
+
+    const created = await createToastMenuReportRequest(
+      base,
+      token,
+      loc.toast_restaurant_guid,
+      compactFromIso(businessDate)
+    );
+
+    const baseRow = {
+      location_id: data.location_id,
+      business_date: businessDate,
+      report_type: MENU_REPORT_TYPE,
+      updated_at: new Date().toISOString(),
+    };
+
+    if ("rateLimited" in created) {
+      const attempt = (existing.data?.attempt_count ?? 0) + 1;
+      const waitS = Math.max(created.retryAfter, backoffSecondsFor(attempt));
+      await supabaseAdmin.from("toast_report_jobs").upsert(
+        {
+          ...baseRow,
+          status: "rate_limited",
+          error: "Toast rate limit (429)",
+          attempt_count: attempt,
+          next_attempt_at: new Date(now + waitS * 1000).toISOString(),
+        },
+        { onConflict: "location_id,business_date,report_type" }
+      );
+      return { ok: false as const, error: `Toast rate limit reached, try again in ${waitS}s.` };
+    }
+    if ("error" in created) {
+      await supabaseAdmin.from("toast_report_jobs").upsert(
+        { ...baseRow, status: "failed", error: created.error, attempt_count: 0 },
+        { onConflict: "location_id,business_date,report_type" }
+      );
+      return { ok: false as const, error: created.error };
+    }
+
+    const upsert = await supabaseAdmin
+      .from("toast_report_jobs")
+      .upsert(
+        {
+          ...baseRow,
+          status: "pending",
+          report_request_guid: created.guid,
+          error: null,
+          rows: null,
+          attempt_count: 0,
+          next_attempt_at: new Date().toISOString(),
+        },
+        { onConflict: "location_id,business_date,report_type" }
+      )
+      .select("id")
+      .single();
+    if (upsert.error) return { ok: false as const, error: upsert.error.message };
+    return { ok: true as const, job_id: upsert.data.id, status: "pending" as const };
+  });
+
+// Poll a Toast menu report job. Hits Toast at most once per call.
+export const pollToastMenuReportJob = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ job_id: z.string().uuid() }).parse(input)
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const jobRes = await supabaseAdmin
+      .from("toast_report_jobs")
+      .select("*")
+      .eq("id", data.job_id)
+      .maybeSingle();
+    if (jobRes.error) return { status: "failed" as const, error: jobRes.error.message, items: [] as MenuItem[] };
+    const job = jobRes.data as any;
+    if (!job) return { status: "failed" as const, error: "Job not found", items: [] as MenuItem[] };
+
+    if (job.status === "ready") {
+      return { status: "ready" as const, items: rowsToMenuItems(job.rows ?? []), error: null as string | null };
+    }
+    if (job.status === "failed") {
+      return { status: "failed" as const, error: job.error ?? "Report failed", items: [] as MenuItem[] };
+    }
+    if (job.status === "rate_limited") {
+      const waitS = Math.max(0, Math.ceil((new Date(job.next_attempt_at).getTime() - Date.now()) / 1000));
+      return { status: "rate_limited" as const, retry_in_seconds: waitS, error: job.error ?? "Toast rate limit", items: [] as MenuItem[] };
+    }
+    if (!job.report_request_guid) {
+      return { status: "pending" as const, error: null as string | null, items: [] as MenuItem[] };
+    }
+
+    const locRes = await loadToastLocation(supabaseAdmin, job.location_id);
+    if (locRes.error) return { status: "failed" as const, error: locRes.error.message, items: [] as MenuItem[] };
+    const loc = locRes.data as any;
+    if (!loc) return { status: "failed" as const, error: "Location not found", items: [] as MenuItem[] };
+    const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
+    let token: string;
+    try {
+      token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+    } catch (e) {
+      return { status: "failed" as const, error: (e as Error).message, items: [] as MenuItem[] };
+    }
+
+    const polled = await pollToastMenuReportOnce(base, token, job.report_request_guid);
+    const now = Date.now();
+    if ("ready" in polled) {
+      await supabaseAdmin
+        .from("toast_report_jobs")
+        .update({ status: "ready", rows: polled.rows, error: null, updated_at: new Date().toISOString() })
+        .eq("id", job.id);
+      return { status: "ready" as const, items: rowsToMenuItems(polled.rows), error: null as string | null };
+    }
+    if ("pending" in polled) {
+      await supabaseAdmin
+        .from("toast_report_jobs")
+        .update({ updated_at: new Date().toISOString() })
+        .eq("id", job.id);
+      return { status: "pending" as const, error: null as string | null, items: [] as MenuItem[] };
+    }
+    if ("rateLimited" in polled) {
+      const attempt = (job.attempt_count ?? 0) + 1;
+      const waitS = Math.max(polled.retryAfter, backoffSecondsFor(attempt));
+      await supabaseAdmin
+        .from("toast_report_jobs")
+        .update({
+          status: "rate_limited",
+          attempt_count: attempt,
+          next_attempt_at: new Date(now + waitS * 1000).toISOString(),
+          error: "Toast rate limit (429)",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", job.id);
+      return { status: "rate_limited" as const, retry_in_seconds: waitS, error: "Toast rate limit reached", items: [] as MenuItem[] };
+    }
+    await supabaseAdmin
+      .from("toast_report_jobs")
+      .update({ status: "failed", error: polled.error, updated_at: new Date().toISOString() })
+      .eq("id", job.id);
+    return { status: "failed" as const, error: polled.error, items: [] as MenuItem[] };
+  });
+
+type MenuListStatus = "ready" | "pending" | "rate_limited" | "failed" | "not_started";
 
 export const listPosMenuItems = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -978,38 +1203,59 @@ export const listPosMenuItems = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const baseColumns =
-      "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret";
-    const extendedColumns = `${baseColumns},toast_api_url`;
-    let locRes = await supabaseAdmin.from("locations").select(extendedColumns).eq("id", data.location_id).maybeSingle();
-    if (locRes.error && isMissingToastMetadataColumn(locRes.error)) {
-      locRes = await supabaseAdmin.from("locations").select(baseColumns).eq("id", data.location_id).maybeSingle();
+    const locRes = await loadToastLocation(supabaseAdmin, data.location_id);
+    if (locRes.error) {
+      return { provider: null as string | null, items: [] as MenuItem[], error: locRes.error.message, job_id: null as string | null, status: "failed" as MenuListStatus };
     }
-    if (locRes.error) return { provider: null as string | null, items: [] as MenuItem[], error: locRes.error.message };
     const loc = locRes.data as any;
-    if (!loc) return { provider: null as string | null, items: [] as MenuItem[], error: "Location not found" };
+    if (!loc) {
+      return { provider: null as string | null, items: [] as MenuItem[], error: "Location not found", job_id: null as string | null, status: "failed" as MenuListStatus };
+    }
 
     const provider: string | null = loc.pos_provider ?? null;
     const hasSquare = !!(loc.square_access_token && loc.square_location_id);
     const hasToast = !!(loc.toast_client_id && loc.toast_client_secret && loc.toast_restaurant_guid);
-
     const use = provider === "square" ? "square" : provider === "toast" ? "toast" : hasSquare ? "square" : hasToast ? "toast" : null;
-    if (!use) return { provider: null as string | null, items: [] as MenuItem[], error: null as string | null };
-
-    try {
-      if (use === "square") {
-        if (!hasSquare) return { provider: "square", items: [], error: "Square credentials missing" };
-        const items = await fetchSquareMenuItems(loc.square_access_token);
-        return { provider: "square", items, error: null as string | null };
-      }
-      if (!hasToast) return { provider: "toast", items: [], error: "Toast credentials missing" };
-      const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
-      const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
-      const items = await fetchToastMenuItems(base, token, loc.toast_restaurant_guid);
-      return { provider: "toast", items, error: null as string | null };
-    } catch (e) {
-      return { provider: use, items: [] as MenuItem[], error: (e as Error).message };
+    if (!use) {
+      return { provider: null as string | null, items: [] as MenuItem[], error: null as string | null, job_id: null as string | null, status: "ready" as MenuListStatus };
     }
+
+    if (use === "square") {
+      if (!hasSquare) return { provider: "square", items: [] as MenuItem[], error: "Square credentials missing", job_id: null, status: "failed" as MenuListStatus };
+      try {
+        const items = await fetchSquareMenuItems(loc.square_access_token);
+        return { provider: "square", items, error: null as string | null, job_id: null, status: "ready" as MenuListStatus };
+      } catch (e) {
+        return { provider: "square", items: [] as MenuItem[], error: (e as Error).message, job_id: null, status: "failed" as MenuListStatus };
+      }
+    }
+
+    if (!hasToast) return { provider: "toast", items: [] as MenuItem[], error: "Toast credentials missing", job_id: null, status: "failed" as MenuListStatus };
+
+    // Toast: never block. Return the latest cached job. UI calls startToastMenuReportJob
+    // to actually kick a report off, then polls pollToastMenuReportJob.
+    const businessDate = yesterdayIsoUtc();
+    const existing = await supabaseAdmin
+      .from("toast_report_jobs")
+      .select("*")
+      .eq("location_id", data.location_id)
+      .eq("business_date", businessDate)
+      .eq("report_type", MENU_REPORT_TYPE)
+      .maybeSingle();
+    if (existing.data) {
+      if (existing.data.status === "ready") {
+        return { provider: "toast", items: rowsToMenuItems(existing.data.rows ?? []), error: null as string | null, job_id: existing.data.id, status: "ready" as MenuListStatus };
+      }
+      if (existing.data.status === "pending") {
+        return { provider: "toast", items: [] as MenuItem[], error: null as string | null, job_id: existing.data.id, status: "pending" as MenuListStatus };
+      }
+      if (existing.data.status === "rate_limited") {
+        const waitS = Math.max(0, Math.ceil((new Date(existing.data.next_attempt_at).getTime() - Date.now()) / 1000));
+        return { provider: "toast", items: [] as MenuItem[], error: `Toast rate limit, try again in ${waitS}s.`, job_id: existing.data.id, status: "rate_limited" as MenuListStatus };
+      }
+      return { provider: "toast", items: [] as MenuItem[], error: existing.data.error ?? null, job_id: existing.data.id, status: "failed" as MenuListStatus };
+    }
+    return { provider: "toast", items: [] as MenuItem[], error: null as string | null, job_id: null, status: "not_started" as MenuListStatus };
   });
 
 // Returns per-day quantity sold across all active trackable items at a location,
