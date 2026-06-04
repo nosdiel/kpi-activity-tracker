@@ -243,6 +243,104 @@ async function toastAccessTokenWithBase(
   return tok;
 }
 
+type ToastMetricsRow = {
+  businessDate?: string | number;
+  netSalesAmount?: number;
+  grossSalesAmount?: number;
+  guestCount?: number;
+  ordersCount?: number;
+  closedOrdersCount?: number;
+};
+
+function compactBusinessDate(iso: string) {
+  return Number(iso.replace(/-/g, ""));
+}
+
+function isoFromToastBusinessDate(value: string | number | undefined) {
+  const compact = String(value ?? "");
+  return /^\d{8}$/.test(compact) ? `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}` : "";
+}
+
+async function fetchToastMetricsRows(
+  base: string,
+  accessToken: string,
+  restaurantGuid: string,
+  startDate: string,
+  endDate: string
+): Promise<ToastMetricsRow[]> {
+  const startCompact = compactBusinessDate(startDate);
+  const endCompact = compactBusinessDate(endDate);
+  let createRes: Response | null = null;
+  let attempt = 0;
+  for (;;) {
+    createRes = await fetch(`${base}/era/v1/metrics/year`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        startBusinessDate: startCompact,
+        endBusinessDate: endCompact,
+        restaurantIds: [restaurantGuid],
+        excludedRestaurantIds: [],
+        groupBy: [],
+      }),
+    });
+    if (createRes.status !== 429 || attempt >= 5) break;
+    const ra = Number(createRes.headers.get("retry-after"));
+    const waitMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(30_000, 2000 * 2 ** attempt);
+    await new Promise((r) => setTimeout(r, waitMs));
+    attempt += 1;
+  }
+  if (!createRes!.ok) {
+    throw new Error(`Toast analytics create ${createRes!.status}: ${(await createRes!.text()).slice(0, 240)}`);
+  }
+  const createdRaw = await createRes.text();
+  let reportRequestGuid = "";
+  try {
+    const parsed = JSON.parse(createdRaw);
+    reportRequestGuid = typeof parsed === "string" ? parsed : (parsed?.reportRequestGuid ?? "");
+  } catch {
+    reportRequestGuid = createdRaw.replace(/^"|"$/g, "");
+  }
+  if (!reportRequestGuid) throw new Error(`Toast analytics: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
+
+  const deadline = Date.now() + 90_000;
+  let lastStatus = 0;
+  let lastBody = "";
+  while (Date.now() < deadline) {
+    const getRes = await fetch(`${base}/era/v1/metrics/${reportRequestGuid}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    lastStatus = getRes.status;
+    if (getRes.status === 200) {
+      const body = await getRes.json();
+      if (Array.isArray(body)) return body as ToastMetricsRow[];
+    } else if (getRes.status === 202 || getRes.status === 204) {
+      lastBody = (await getRes.text()).slice(0, 200);
+    } else {
+      throw new Error(`Toast analytics get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`);
+    }
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  throw new Error(`Toast analytics: report not ready in time (last status ${lastStatus}${lastBody ? `: ${lastBody}` : ""})`);
+}
+
+function toastTotalsFromRows(rows: ToastMetricsRow[]) {
+  let totalCents = 0;
+  let customerCount = 0;
+  for (const row of rows) {
+    const amount = Number(row?.netSalesAmount ?? row?.grossSalesAmount ?? 0);
+    if (Number.isFinite(amount)) totalCents += Math.round(amount * 100);
+    const guestCount = Number(row?.guestCount ?? 0);
+    const orderCount = Number(row?.ordersCount ?? row?.closedOrdersCount ?? 0);
+    const guests = guestCount > 0 ? guestCount : orderCount;
+    if (Number.isFinite(guests)) customerCount += Math.round(guests);
+  }
+  return { totalCents, customerCount };
+}
+
 async function toastDayTotalWithBase(
   base: string,
   accessToken: string,
