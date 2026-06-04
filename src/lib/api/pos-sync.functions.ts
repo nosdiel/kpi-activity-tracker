@@ -945,37 +945,25 @@ async function fetchToastMenuItems(
   restaurantGuid: string
 ): Promise<MenuItem[]> {
   // Use Toast Analytics API Menu Reporting only (scope: enterprise-metrics:read).
-  // Try the most recent business days until we get items, bounded tight to
-  // avoid upstream request timeouts.
+  // Try the most recent completed business day only. Analytics reports can
+  // take longer than the server request limit, so this path must return fast.
   const toCompact = (d: Date) =>
     Number(
       `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
     );
-  const days: number[] = [];
-  for (let i = 1; i <= 2; i++) {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() - i);
-    days.push(toCompact(d));
-  }
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  const day = toCompact(d);
   const out: MenuItem[] = [];
   const seen = new Set<string>();
-  let lastErr = "";
-  for (const day of days) {
-    try {
-      const rows = await fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, day);
-      for (const row of rows) {
-        const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
-        const name = String(row?.menuItemName ?? "").trim();
-        if (!id || !name || seen.has(id)) continue;
-        seen.add(id);
-        out.push({ id, name, category: row?.menuGroupName ?? row?.salesCategory ?? null });
-      }
-      if (out.length > 0) break;
-    } catch (e) {
-      lastErr = (e as Error).message;
-    }
+  const rows = await fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, day, 8_000);
+  for (const row of rows) {
+    const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
+    const name = String(row?.menuItemName ?? "").trim();
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name, category: row?.menuGroupName ?? row?.salesCategory ?? null });
   }
-  if (out.length === 0 && lastErr) throw new Error(lastErr);
   out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
