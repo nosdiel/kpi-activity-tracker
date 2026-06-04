@@ -18,7 +18,7 @@ import {
 
 export const Route = createFileRoute("/_authenticated/pnl")({
   ssr: false,
-  head: () => ({ meta: [{ title: "Weekly PNL — NiNi KPI" }] }),
+  head: () => ({ meta: [{ title: "Weekly P&L — NiNi KPI" }] }),
   component: WeeklyPnlPage,
 });
 
@@ -140,7 +140,7 @@ function WeeklyPnlPage() {
   const periodRange = periodWeekRange(period);
   const dates = useMemo(() => (fyRow && week ? weekDates(fyRow.start_date, week) : []), [fyRow, week]);
 
-  // Weekly PNL row
+  // Weekly P&L row
   const pnlQ = useQuery({
     queryKey: ["weekly-pnl-row", locationId, fy, week],
     enabled: !!locationId && !!fy && !!week,
@@ -283,13 +283,13 @@ function WeeklyPnlPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Weekly PNL</h1>
+          <h1 className="text-3xl font-bold tracking-tight">Weekly P&L</h1>
           <p className="text-sm text-muted-foreground mt-1">
             {locName} · FY{fy ?? "—"} · Period {period} · Week {week ?? "—"}
           </p>
         </div>
         <div className="flex gap-2" data-print-actions>
-          <Button variant="outline" size="sm" disabled>Weekly PNL</Button>
+          <Button variant="outline" size="sm" disabled>Weekly P&L</Button>
           <Button variant="outline" size="sm" asChild>
             <Link to="/pnl-qtr">QTR Report</Link>
           </Button>
