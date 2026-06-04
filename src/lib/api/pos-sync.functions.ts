@@ -234,32 +234,83 @@ async function toastDayTotalWithBase(
   restaurantGuid: string,
   businessDate: string
 ): Promise<number> {
-  const compact = businessDate.replace(/-/g, "");
-  let page = 1;
-  let totalCents = 0;
-  for (;;) {
-    const url = `${base}/orders/v2/ordersBulk?businessDate=${compact}&page=${page}&pageSize=100`;
-    const res = await fetch(url, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Toast-Restaurant-External-ID": restaurantGuid,
-      },
+  // Toast Analytics API (async): POST a report request, then poll for results.
+  // Docs: https://doc.toasttab.com/doc/devguide/apiAnalyticsMetricsReportingDataCreateRequest.html
+  const compact = Number(businessDate.replace(/-/g, "")); // YYYYMMDD integer
+
+  // 1) Create the report request for a single day, for this restaurant only.
+  const createRes = await fetch(`${base}/era/v1/metrics/day`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      startBusinessDate: compact,
+      endBusinessDate: compact,
+      restaurantIds: [restaurantGuid],
+      excludedRestaurantIds: [],
+    }),
+  });
+  if (!createRes.ok) {
+    throw new Error(
+      `Toast analytics create ${createRes.status}: ${(await createRes.text()).slice(0, 240)}`
+    );
+  }
+  // Response is a JSON string containing the reportRequestGuid.
+  const createdRaw = await createRes.text();
+  let reportRequestGuid = "";
+  try {
+    const parsed = JSON.parse(createdRaw);
+    reportRequestGuid = typeof parsed === "string" ? parsed : (parsed?.reportRequestGuid ?? "");
+  } catch {
+    reportRequestGuid = createdRaw.replace(/^"|"$/g, "");
+  }
+  if (!reportRequestGuid) {
+    throw new Error(`Toast analytics: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
+  }
+
+  // 2) Poll for results. Analytics jobs are async; small datasets return quickly.
+  const deadline = Date.now() + 60_000;
+  let rows: Array<{ netSalesAmount?: number; grossSalesAmount?: number }> | null = null;
+  let lastStatus = 0;
+  let lastBody = "";
+  while (Date.now() < deadline) {
+    const getRes = await fetch(`${base}/era/v1/metrics/${reportRequestGuid}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
     });
-    if (!res.ok) throw new Error(`Toast ${res.status}: ${(await res.text()).slice(0, 240)}`);
-    const orders = (await res.json()) as Array<{
-      voided?: boolean;
-      checks?: Array<{ totalAmount?: number; voided?: boolean }>;
-    }>;
-    if (!orders || orders.length === 0) break;
-    for (const o of orders) {
-      if (o.voided) continue;
-      for (const c of o.checks ?? []) {
-        if (c.voided) continue;
-        totalCents += Math.round(Number(c.totalAmount ?? 0) * 100);
+    lastStatus = getRes.status;
+    if (getRes.status === 200) {
+      const ct = getRes.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        const body = await getRes.json();
+        if (Array.isArray(body)) {
+          rows = body;
+          break;
+        }
+      } else {
+        lastBody = (await getRes.text()).slice(0, 200);
       }
+    } else if (getRes.status === 202 || getRes.status === 204) {
+      lastBody = (await getRes.text()).slice(0, 200);
+    } else {
+      throw new Error(
+        `Toast analytics get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`
+      );
     }
-    if (orders.length < 100) break;
-    page += 1;
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  if (!rows) {
+    throw new Error(
+      `Toast analytics: report not ready in time (last status ${lastStatus}${lastBody ? `: ${lastBody}` : ""})`
+    );
+  }
+
+  // 3) Sum net sales across returned rows.
+  let totalCents = 0;
+  for (const row of rows) {
+    const amount = Number(row?.netSalesAmount ?? row?.grossSalesAmount ?? 0);
+    if (Number.isFinite(amount)) totalCents += Math.round(amount * 100);
   }
   return totalCents;
 }
