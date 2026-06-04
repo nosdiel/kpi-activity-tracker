@@ -930,84 +930,42 @@ async function fetchToastMenuItems(
   accessToken: string,
   restaurantGuid: string
 ): Promise<MenuItem[]> {
-  // Try Toast's published Menus v2 first — fast, single request.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15_000);
-  let res: Response | null = null;
-  let menusV2Err = "";
-  try {
-    res = await fetch(`${base}/menus/v2/menus`, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Toast-Restaurant-External-ID": restaurantGuid,
-      },
-      signal: controller.signal,
-    });
-  } catch (e) {
-    menusV2Err = (e as Error).message;
-  } finally {
-    clearTimeout(timer);
-  }
-  if (res && res.ok) {
-    const body: any = await res.json();
-    const out: MenuItem[] = [];
-    const seen = new Set<string>();
-    const menus: any[] = Array.isArray(body?.menus) ? body.menus : Array.isArray(body) ? body : [];
-    for (const menu of menus) {
-      const menuName: string = String(menu?.name ?? "").trim();
-      const walk = (groups: any[], path: string) => {
-        for (const group of groups ?? []) {
-          const groupName = String(group?.name ?? "").trim();
-          const pathHere = groupName || path || menuName;
-          const items = group?.menuItems ?? group?.items ?? group?.menu_items ?? [];
-          for (const rawItem of items) {
-            const item = rawItem?.item ?? rawItem;
-            const id = String(item?.guid ?? item?.entityId ?? item?.referenceId ?? item?.externalId ?? item?.name ?? "").trim();
-            const name = String(item?.name ?? item?.displayName ?? "").trim();
-            if (!id || !name || seen.has(id)) continue;
-            seen.add(id);
-            out.push({ id, name, category: pathHere || null });
-          }
-          const childGroups = group?.menuGroups ?? group?.groups ?? group?.subgroups ?? group?.subGroups ?? [];
-          if (Array.isArray(childGroups) && childGroups.length) walk(childGroups, pathHere);
-        }
-      };
-      walk(menu?.menuGroups ?? menu?.groups ?? [], "");
-    }
-    out.sort((a, b) => a.name.localeCompare(b.name));
-    if (out.length > 0) return out;
-  } else if (res) {
-    menusV2Err = `Menus v2 ${res.status}: ${(await res.text().catch(() => "")).slice(0, 200)}`;
-  }
-
-  // Fallback: Analytics menu report for the most recent business day.
-  // Bounded tight to avoid upstream request timeouts.
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() - 1);
-  const compact = Number(
-    `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
-  );
-  try {
-    const rows = await fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, compact);
-    const out: MenuItem[] = [];
-    const seen = new Set<string>();
-    for (const row of rows) {
-      const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
-      const name = String(row?.menuItemName ?? "").trim();
-      if (!id || !name || seen.has(id)) continue;
-      seen.add(id);
-      out.push({ id, name, category: row?.menuGroupName ?? row?.salesCategory ?? null });
-    }
-    out.sort((a, b) => a.name.localeCompare(b.name));
-    if (out.length > 0) return out;
-  } catch (e) {
-    const analyticsErr = (e as Error).message;
-    throw new Error(
-      `Could not load Toast menu. Menus v2 access is missing (${menusV2Err || "no response"}) and Analytics fallback failed (${analyticsErr}). In your Toast integration, enable the "Menus" API scope (config:read or menus:read) for this client.`
+  // Use Toast Analytics API Menu Reporting only (scope: enterprise-metrics:read).
+  // Try the most recent business days until we get items, bounded tight to
+  // avoid upstream request timeouts.
+  const toCompact = (d: Date) =>
+    Number(
+      `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
     );
+  const days: number[] = [];
+  for (let i = 1; i <= 2; i++) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - i);
+    days.push(toCompact(d));
   }
-  return [];
+  const out: MenuItem[] = [];
+  const seen = new Set<string>();
+  let lastErr = "";
+  for (const day of days) {
+    try {
+      const rows = await fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, day);
+      for (const row of rows) {
+        const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
+        const name = String(row?.menuItemName ?? "").trim();
+        if (!id || !name || seen.has(id)) continue;
+        seen.add(id);
+        out.push({ id, name, category: row?.menuGroupName ?? row?.salesCategory ?? null });
+      }
+      if (out.length > 0) break;
+    } catch (e) {
+      lastErr = (e as Error).message;
+    }
+  }
+  if (out.length === 0 && lastErr) throw new Error(lastErr);
+  out.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
 }
+
 
 
 
