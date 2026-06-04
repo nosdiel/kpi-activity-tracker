@@ -78,8 +78,10 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
         .from("pos_sync_log")
         .select("*")
         .eq("source", source)
+        .eq("status", "error")
         .order("created_at", { ascending: false })
         .limit(20);
+
       if (error) throw error;
       return data ?? [];
     },
