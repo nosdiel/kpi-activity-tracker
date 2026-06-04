@@ -474,3 +474,43 @@ export const getLocationsPosStatus = createServerFn({ method: "GET" })
       toast_secret_set: Boolean(l.toast_client_secret),
     }));
   });
+
+// Backfill actual_sales from total_cents for any rows where actual_sales is missing/zero.
+export const backfillActualSales = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .handler(async () => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+
+    let updated = 0;
+    let scanned = 0;
+    const pageSize = 500;
+    let from = 0;
+    for (;;) {
+      const { data, error } = await supabaseAdmin
+        .from("daily_sales")
+        .select("location_id,business_date,total_cents,actual_sales")
+        .not("total_cents", "is", null)
+        .gt("total_cents", 0)
+        .or("actual_sales.is.null,actual_sales.eq.0")
+        .range(from, from + pageSize - 1);
+      if (error) throw new Error(error.message);
+      const rows = data ?? [];
+      if (rows.length === 0) break;
+      scanned += rows.length;
+
+      for (const r of rows as Array<{ location_id: string; business_date: string; total_cents: number }>) {
+        const actual_sales = Math.round(Number(r.total_cents)) / 100;
+        const { error: upErr } = await supabaseAdmin
+          .from("daily_sales")
+          .update({ actual_sales })
+          .eq("location_id", r.location_id)
+          .eq("business_date", r.business_date);
+        if (upErr) throw new Error(`backfill update: ${upErr.message}`);
+        updated += 1;
+      }
+      if (rows.length < pageSize) break;
+      from += pageSize;
+    }
+    return { ok: true, scanned, updated };
+  });
+

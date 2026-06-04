@@ -8,6 +8,7 @@ import {
   syncToast,
   updateLocationPosCredentials,
   getLocationsPosStatus,
+  backfillActualSales,
 } from "@/lib/api/pos-sync.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -50,6 +51,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   const syncFn = useServerFn(source === "square" ? syncSquare : syncToast);
   const updateCreds = useServerFn(updateLocationPosCredentials);
   const statusFn = useServerFn(getLocationsPosStatus);
+  const backfillFn = useServerFn(backfillActualSales);
   const [date, setDate] = useState("");
   const [editing, setEditing] = useState<LocStatus | null>(null);
   const [form, setForm] = useState({
@@ -99,6 +101,14 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
       const err = res.results.length - ok;
       toast.success(`Synced ${ok} location(s)${err ? `, ${err} failed` : ""}`);
       qc.invalidateQueries({ queryKey: ["pos_sync_log"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const backfillMut = useMutation({
+    mutationFn: async () => backfillFn() as Promise<{ scanned: number; updated: number }>,
+    onSuccess: (res) => {
+      toast.success(`Backfilled ${res.updated} row(s) (scanned ${res.scanned})`);
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -159,6 +169,13 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
             </div>
             <Button onClick={() => syncMut.mutate(undefined)} disabled={syncMut.isPending}>
               {syncMut.isPending ? "Syncing..." : "Sync all"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => backfillMut.mutate()}
+              disabled={backfillMut.isPending}
+            >
+              {backfillMut.isPending ? "Backfilling..." : "Backfill actual_sales"}
             </Button>
             <p className="text-xs text-muted-foreground">
               Only locations with complete credentials are synced.
