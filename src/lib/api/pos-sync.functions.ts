@@ -12,6 +12,7 @@ type SyncResult = {
   business_date: string;
   status: "ok" | "error";
   total_cents?: number;
+  customer_count?: number;
   message?: string;
 };
 
@@ -37,15 +38,24 @@ async function upsertDailySales(
   location_id: string,
   business_date: string,
   total_cents: number,
-  source: "square" | "toast"
+  source: "square" | "toast",
+  customer_count: number
 ) {
   const actual_sales = Math.round(total_cents) / 100;
   const { error } = await supabaseAdmin.from("daily_sales").upsert(
-    { location_id, business_date, total_cents, actual_sales, source },
+    {
+      location_id,
+      business_date,
+      total_cents,
+      actual_sales,
+      actual_customer_count: customer_count,
+      source,
+    },
     { onConflict: "location_id,business_date" }
   );
   if (error) throw new Error(`daily_sales upsert: ${error.message}`);
 }
+
 
 // -----------------------------------------------------------------------------
 // SQUARE
@@ -54,11 +64,12 @@ async function squareDayTotal(
   accessToken: string,
   locationId: string,
   businessDate: string
-): Promise<number> {
+): Promise<{ totalCents: number; customerCount: number }> {
   const start = `${businessDate}T00:00:00Z`;
   const end = `${businessDate}T23:59:59Z`;
   let cursor: string | undefined;
   let totalCents = 0;
+  let customerCount = 0;
 
   do {
     const res = await fetch(`${SQUARE_BASE}/v2/orders/search`, {
@@ -90,12 +101,14 @@ async function squareDayTotal(
     for (const o of json.orders ?? []) {
       const amt = o.net_amounts?.total_money?.amount ?? o.total_money?.amount ?? 0;
       totalCents += Number(amt);
+      customerCount += 1;
     }
     cursor = json.cursor;
   } while (cursor);
 
-  return totalCents;
+  return { totalCents, customerCount };
 }
+
 
 export const syncSquare = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -129,13 +142,14 @@ export const syncSquare = createServerFn({ method: "POST" })
         status: "ok",
       };
       try {
-        const total = await squareDayTotal(
+        const { totalCents, customerCount } = await squareDayTotal(
           loc.square_access_token,
           loc.square_location_id,
           businessDate
         );
-        r.total_cents = total;
-        await upsertDailySales(supabaseAdmin, loc.id, businessDate, total, "square");
+        r.total_cents = totalCents;
+        r.customer_count = customerCount;
+        await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, "square", customerCount);
       } catch (e) {
         r.status = "error";
         r.message = (e as Error).message;
@@ -234,7 +248,7 @@ async function toastDayTotalWithBase(
   accessToken: string,
   restaurantGuid: string,
   businessDate: string
-): Promise<number> {
+): Promise<{ totalCents: number; customerCount: number }> {
   // Toast Analytics API (async): POST a report request, then poll for results.
   // Docs: https://doc.toasttab.com/doc/devguide/apiAnalyticsMetricsReportingDataCreateRequest.html
   const compact = Number(businessDate.replace(/-/g, "")); // YYYYMMDD integer
@@ -285,7 +299,15 @@ async function toastDayTotalWithBase(
 
   // 2) Poll for results. Analytics jobs are async; small datasets return quickly.
   const deadline = Date.now() + 60_000;
-  let rows: Array<{ netSalesAmount?: number; grossSalesAmount?: number }> | null = null;
+  let rows:
+    | Array<{
+        netSalesAmount?: number;
+        grossSalesAmount?: number;
+        guestCount?: number;
+        checkCount?: number;
+        orderCount?: number;
+      }>
+    | null = null;
   let lastStatus = 0;
   let lastBody = "";
   while (Date.now() < deadline) {
@@ -319,14 +341,18 @@ async function toastDayTotalWithBase(
     );
   }
 
-  // 3) Sum net sales across returned rows.
+  // 3) Sum net sales and customer count across returned rows.
   let totalCents = 0;
+  let customerCount = 0;
   for (const row of rows) {
     const amount = Number(row?.netSalesAmount ?? row?.grossSalesAmount ?? 0);
     if (Number.isFinite(amount)) totalCents += Math.round(amount * 100);
+    const guests = Number(row?.guestCount ?? row?.checkCount ?? row?.orderCount ?? 0);
+    if (Number.isFinite(guests)) customerCount += guests;
   }
-  return totalCents;
+  return { totalCents, customerCount };
 }
+
 
 // keep older helpers referenced (suppress unused warnings)
 void toastAccessToken;
@@ -400,9 +426,10 @@ export const syncToast = createServerFn({ method: "POST" })
       try {
         const base = ((loc as any).toast_api_url || TOAST_BASE).replace(/\/+$/, "");
         const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
-        const total = await toastDayTotalWithBase(base, token, loc.toast_restaurant_guid, businessDate);
-        r.total_cents = total;
-        await upsertDailySales(supabaseAdmin, loc.id, businessDate, total, "toast");
+        const { totalCents, customerCount } = await toastDayTotalWithBase(base, token, loc.toast_restaurant_guid, businessDate);
+        r.total_cents = totalCents;
+        r.customer_count = customerCount;
+        await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, "toast", customerCount);
       } catch (e) {
         r.status = "error";
         r.message = (e as Error).message;
@@ -615,22 +642,23 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         processed += 1;
         if (have.has(`${loc.id}|${businessDate}`)) continue;
         try {
-          let total = 0;
+          let totalCents = 0;
+          let customerCount = 0;
           if (source === "square") {
-            total = await squareDayTotal(
+            ({ totalCents, customerCount } = await squareDayTotal(
               loc.square_access_token,
               loc.square_location_id,
               businessDate
-            );
+            ));
           } else {
-            total = await toastDayTotalWithBase(
+            ({ totalCents, customerCount } = await toastDayTotalWithBase(
               toastBase,
               toastToken!,
               loc.toast_restaurant_guid,
               businessDate
-            );
+            ));
           }
-          await upsertDailySales(supabaseAdmin, loc.id, businessDate, total, source);
+          await upsertDailySales(supabaseAdmin, loc.id, businessDate, totalCents, source, customerCount);
           inserted += 1;
         } catch (e) {
           errors.push({
