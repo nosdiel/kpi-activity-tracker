@@ -274,7 +274,7 @@ function DashboardPage() {
         <div>
           <h1 className="text-3xl font-bold tracking-tight">Daily Sales Activity</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            {locName} · FY{fy ?? "—"} · Period {period} · Week {week ?? "—"}
+            {locName} · FY{fy ?? "—"} · Q{quarter} · Week {week ?? "—"}
           </p>
         </div>
         <div className="flex gap-2">
@@ -303,24 +303,24 @@ function DashboardPage() {
             <Select value={fy?.toString() ?? ""} onValueChange={(v) => setFy(Number(v))}>
               <SelectTrigger><SelectValue placeholder="FY" /></SelectTrigger>
               <SelectContent>
-                {(fyQ.data ?? []).map((y) => (
+                {fiscalYears.map((y) => (
                   <SelectItem key={y.fiscal_year} value={String(y.fiscal_year)}>FY {y.fiscal_year}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Fiscal Period">
-            <Select value={String(period)} onValueChange={(v) => {
-              const p = Number(v);
-              setWeek(periodWeekRange(p).start);
+          <Field label="Fiscal Quarter">
+            <Select value={String(quarter)} onValueChange={(v) => {
+              const q = Number(v);
+              setWeek(quarterWeekRange(q).start);
             }}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Array.from({ length: 13 }, (_, i) => i + 1).map((p) => {
-                  const r = periodWeekRange(p);
+                {Array.from({ length: 4 }, (_, i) => i + 1).map((q) => {
+                  const r = quarterWeekRange(q);
                   return (
-                    <SelectItem key={p} value={String(p)}>
-                      P{p} (Q{quarterForPeriod(p)}, wk {r.start}–{r.end})
+                    <SelectItem key={q} value={String(q)}>
+                      Q{q} (Weeks {r.start}–{r.end})
                     </SelectItem>
                   );
                 })}
@@ -331,7 +331,7 @@ function DashboardPage() {
             <Select value={week?.toString() ?? ""} onValueChange={(v) => setWeek(Number(v))}>
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                {Array.from({ length: periodRange.end - periodRange.start + 1 }, (_, i) => periodRange.start + i).map((w) => {
+                {Array.from({ length: quarterRange.end - quarterRange.start + 1 }, (_, i) => quarterRange.start + i).map((w) => {
                   const wd = fyRow ? weekDates(fyRow.start_date, w) : [];
                   const fmt = (iso: string) => {
                     const d = new Date(`${iso}T00:00:00Z`);
