@@ -331,6 +331,8 @@ export const updateLocationPosCredentials = createServerFn({ method: "POST" })
         square_location_id: z.string().max(64).nullable().optional(),
         square_access_token: z.string().min(10).max(512).nullable().optional(),
         // Toast
+        toast_credential_name: z.string().max(128).nullable().optional(),
+        toast_api_url: z.string().url().max(256).nullable().optional(),
         toast_restaurant_guid: z.string().max(64).nullable().optional(),
         toast_client_id: z.string().max(128).nullable().optional(),
         toast_client_secret: z.string().min(10).max(512).nullable().optional(),
@@ -345,6 +347,8 @@ export const updateLocationPosCredentials = createServerFn({ method: "POST" })
     };
     setIfPresent("square_location_id");
     setIfPresent("square_access_token");
+    setIfPresent("toast_credential_name");
+    setIfPresent("toast_api_url");
     setIfPresent("toast_restaurant_guid");
     setIfPresent("toast_client_id");
     setIfPresent("toast_client_secret");
