@@ -12,8 +12,13 @@ import {
   quarterForPeriod,
   weekDates,
   currentFiscalWeek,
-  DAY_NAMES,
 } from "@/lib/fiscal";
+
+const DAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+function dayNameFromISO(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return DAY_NAMES[d.getUTCDay()];
+}
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   ssr: false,
@@ -220,7 +225,7 @@ function DashboardPage() {
     const actAvg = cust > 0 ? actual / cust : 0;
     const dessertMonth = dessertCumulative.get(d) ?? 0;
     const hasActual = s && (s.actual_sales !== null || s.actual_customer_count !== null);
-    return { date: d, day: DAY_NAMES[i], ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, dessertMonth, hasActual };
+    return { date: d, day: dayNameFromISO(d), ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, dessertMonth, hasActual };
   });
 
 
