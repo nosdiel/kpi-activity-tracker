@@ -302,9 +302,12 @@ function TrackableItemsPage() {
                         <CommandEmpty>
                           {menuQ.error
                             ? `Error: ${(menuQ.error as Error).message}`
+                            : menuQ.data?.error
+                            ? `Error: ${menuQ.data.error}`
                             : menuItems.length === 0
                             ? "No menu items found for this location."
                             : "No match."}
+
                         </CommandEmpty>
                         <CommandGroup>
                           {form.pos_product && (
