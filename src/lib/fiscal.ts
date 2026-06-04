@@ -21,9 +21,17 @@ export function quarterForPeriod(period: number): number {
   return Math.min(4, Math.ceil(period / 3));
 }
 
-/** Returns ISO date strings (YYYY-MM-DD) for each day of the fiscal week. */
+/** Snap to the Sunday on or before the given UTC date. */
+function snapToSunday(d: Date): Date {
+  const out = new Date(d);
+  out.setUTCDate(out.getUTCDate() - out.getUTCDay());
+  return out;
+}
+
+/** Returns ISO date strings (YYYY-MM-DD) for each day of the fiscal week (Sun–Sat). */
 export function weekDates(fyStartISO: string, week: number): string[] {
-  const start = new Date(`${fyStartISO}T00:00:00Z`);
+  const fyStart = new Date(`${fyStartISO}T00:00:00Z`);
+  const start = snapToSunday(fyStart);
   start.setUTCDate(start.getUTCDate() + (week - 1) * 7);
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
@@ -33,8 +41,10 @@ export function weekDates(fyStartISO: string, week: number): string[] {
 }
 
 export function currentFiscalWeek(fyStartISO: string, today = new Date()): number {
-  const start = new Date(`${fyStartISO}T00:00:00Z`);
-  const diffDays = Math.floor((today.getTime() - start.getTime()) / 86_400_000);
+  const fyStart = new Date(`${fyStartISO}T00:00:00Z`);
+  const start = snapToSunday(fyStart);
+  const todayUTC = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+  const diffDays = Math.floor((todayUTC - start.getTime()) / 86_400_000);
   return Math.max(1, Math.min(52, Math.floor(diffDays / 7) + 1));
 }
 
