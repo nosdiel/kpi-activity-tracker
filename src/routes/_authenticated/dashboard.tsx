@@ -225,7 +225,7 @@ function DashboardPage() {
     const actAvg = cust > 0 ? actual / cust : 0;
     const dessertMonth = dessertCumulative.get(d) ?? 0;
     const hasActual = s && (s.actual_sales !== null || s.actual_customer_count !== null);
-    return { date: d, day: DAY_NAMES[i], ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, dessertMonth, hasActual };
+    return { date: d, day: dayNameFromISO(d), ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, dessertMonth, hasActual };
   });
 
 
