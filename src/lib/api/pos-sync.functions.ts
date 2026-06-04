@@ -930,24 +930,60 @@ async function fetchToastMenuItems(
   accessToken: string,
   restaurantGuid: string
 ): Promise<MenuItem[]> {
+  // Try Toast's published Menus v2 first — single request, fast, no polling.
+  try {
+    const res = await fetch(`${base}/menus/v2/menus`, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Toast-Restaurant-External-ID": restaurantGuid,
+      },
+    });
+    if (res.ok) {
+      const body: any = await res.json();
+      const out: MenuItem[] = [];
+      const seen = new Set<string>();
+      const menus: any[] = Array.isArray(body?.menus) ? body.menus : Array.isArray(body) ? body : [];
+      for (const menu of menus) {
+        const menuName: string = menu?.name ?? "";
+        const walk = (grps: any[], path: string) => {
+          for (const g of grps ?? []) {
+            const gName = g?.name ?? "";
+            const pathHere = path || menuName;
+            for (const it of g?.menuItems ?? []) {
+              const id = String(it?.guid ?? it?.referenceId ?? it?.name ?? "").trim();
+              const name = String(it?.name ?? "").trim();
+              if (!id || !name || seen.has(id)) continue;
+              seen.add(id);
+              out.push({ id, name, category: gName || pathHere || null });
+            }
+            if (Array.isArray(g?.menuGroups) && g.menuGroups.length) walk(g.menuGroups, pathHere);
+          }
+        };
+        walk(menu?.menuGroups ?? [], "");
+      }
+      if (out.length > 0) {
+        out.sort((a, b) => a.name.localeCompare(b.name));
+        return out;
+      }
+    }
+  } catch {
+    // fall through to analytics fallback
+  }
+
+  // Fallback: Analytics menu report (slower, requires enterprise-metrics:read).
   const toCompact = (d: Date) =>
     Number(
       `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
     );
-
-  // Pull a small recent window (3 days) in parallel — menus rarely change, so this
-  // is plenty to populate the catalog and keeps refresh fast. Skip today (often not yet closed).
   const days: number[] = [];
   for (let i = 1; i <= 3; i++) {
     const d = new Date();
     d.setUTCDate(d.getUTCDate() - i);
     days.push(toCompact(d));
   }
-
   const results = await Promise.allSettled(
     days.map((d) => fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, d))
   );
-
   const out: MenuItem[] = [];
   const seen = new Set<string>();
   let lastErr = "";
