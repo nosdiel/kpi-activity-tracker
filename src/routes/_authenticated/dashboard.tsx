@@ -260,20 +260,19 @@ function DashboardPage() {
     const varCust = cust - lyCust;
     const lyAvg = lyCust > 0 ? ly / lyCust : 0;
     const actAvg = cust > 0 ? actual / cust : 0;
-    const dessertMonth = dessertCumulative.get(d) ?? 0;
+    const focusItem = focusCumulative.get(d) ?? 0;
     const hasActual = s && (s.actual_sales !== null || s.actual_customer_count !== null);
-    return { date: d, day: dayNameFromISO(d), ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, dessertMonth, hasActual };
+    return { date: d, day: dayNameFromISO(d), ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, focusItem, hasActual };
   });
-
 
   const totals = rows.reduce(
     (a, r) => {
       a.ly += r.ly; a.lyCust += r.lyCust; a.actual += r.actual; a.cust += r.cust;
       a.target += r.target; a.varSales += r.varSales; a.varCust += r.varCust;
-      a.dessertMonth = r.dessertMonth || a.dessertMonth;
+      a.focusItem = r.focusItem || a.focusItem;
       return a;
     },
-    { ly: 0, lyCust: 0, actual: 0, cust: 0, target: 0, varSales: 0, varCust: 0, dessertMonth: 0 },
+    { ly: 0, lyCust: 0, actual: 0, cust: 0, target: 0, varSales: 0, varCust: 0, focusItem: 0 },
   );
   const lyAvgTotal = totals.lyCust > 0 ? totals.ly / totals.lyCust : 0;
   const actAvgTotal = totals.cust > 0 ? totals.actual / totals.cust : 0;
