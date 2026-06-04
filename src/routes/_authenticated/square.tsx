@@ -57,6 +57,9 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   const backfillRangeFn = useServerFn(backfillSalesRange);
   const clearErrorsFn = useServerFn(clearSyncErrors);
   const [date, setDate] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
   const [editing, setEditing] = useState<LocStatus | null>(null);
   const [form, setForm] = useState({
     square_location_id: "",
@@ -124,8 +127,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   });
 
   const backfillRangeMut = useMutation({
-    mutationFn: async () =>
-      backfillRangeFn({ data: { source, days: 365 } }) as Promise<{
+    mutationFn: async (vars: { days?: number; start_date?: string; end_date?: string }) =>
+      backfillRangeFn({ data: { source, ...vars } }) as Promise<{
         days: number;
         processed: number;
         inserted: number;
@@ -142,6 +145,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
 
   const title = source === "square" ? "Square Sync" : "Toast Sync";
   const idLabel = source === "square" ? "Square Location ID" : "Toast Restaurant GUID";
@@ -209,7 +213,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
             </Button>
             <Button
               variant="secondary"
-              onClick={() => backfillRangeMut.mutate()}
+              onClick={() => backfillRangeMut.mutate({ days: 365 })}
               disabled={backfillRangeMut.isPending}
             >
               {backfillRangeMut.isPending ? "Backfilling 365 days..." : "Backfill last 365 days"}
@@ -218,6 +222,44 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
               Only locations with complete credentials are synced.
             </p>
           </div>
+
+          <div className="flex flex-wrap items-end gap-3 border-t pt-3">
+            <div>
+              <Label className="text-xs">Backfill start date</Label>
+              <Input
+                type="date"
+                value={startDate}
+                onChange={(e) => setStartDate(e.target.value)}
+                className="w-44"
+              />
+            </div>
+            <div>
+              <Label className="text-xs">Backfill end date</Label>
+              <Input
+                type="date"
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                className="w-44"
+              />
+            </div>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                if (!startDate || !endDate) {
+                  toast.error("Pick both start and end dates");
+                  return;
+                }
+                backfillRangeMut.mutate({ start_date: startDate, end_date: endDate });
+              }}
+              disabled={backfillRangeMut.isPending}
+            >
+              {backfillRangeMut.isPending ? "Backfilling..." : "Backfill date range"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Use a range that spans last year to populate LY Sales on the dashboard.
+            </p>
+          </div>
+
 
           {locsQ.isLoading ? (
             <p className="text-sm text-muted-foreground">Loading...</p>

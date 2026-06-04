@@ -564,14 +564,32 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
       .object({
         source: z.enum(["square", "toast"]),
         days: z.number().int().min(1).max(730).optional(),
+        start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         location_id: z.string().uuid().optional(),
       })
       .parse(input)
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const days = data.days ?? 365;
     const source = data.source;
+
+    // Build the explicit list of business dates to backfill (inclusive).
+    let dateList: string[];
+    if (data.start_date && data.end_date) {
+      const start = new Date(`${data.start_date}T00:00:00Z`);
+      const end = new Date(`${data.end_date}T00:00:00Z`);
+      if (end < start) throw new Error("end_date must be on or after start_date");
+      dateList = [];
+      for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
+        dateList.push(d.toISOString().slice(0, 10));
+      }
+      if (dateList.length > 730) throw new Error("Date range too large (max 730 days)");
+    } else {
+      const days = data.days ?? 365;
+      dateList = Array.from({ length: days }, (_, i) => isoDaysAgo(i + 1));
+    }
+    const days = dateList.length;
 
     let locs: any[] = [];
     if (source === "square") {
@@ -590,8 +608,10 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
       locs = rows ?? [];
     }
 
-    const startDate = isoDaysAgo(days);
-    const endDate = isoDaysAgo(1);
+    const sortedDates = [...dateList].sort();
+    const startDate = sortedDates[0];
+    const endDate = sortedDates[sortedDates.length - 1];
+
     const locIds = locs.map((l: any) => l.id);
     const have = new Set<string>();
     if (locIds.length > 0) {
@@ -641,8 +661,8 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         }
       }
 
-      for (let i = 1; i <= days; i++) {
-        const businessDate = isoDaysAgo(i);
+      for (const businessDate of dateList) {
+
         processed += 1;
         if (have.has(`${loc.id}|${businessDate}`)) continue;
         try {
