@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -106,7 +107,7 @@ function TrackableItemsPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Initial / cached lookup. Never blocks on Toast.
+  // Initial / cached lookup. Never blocks on Toast. Auto-runs when a location is picked.
   const menuQ = useQuery({
     queryKey: ["pos-menu-items", form.location_id],
     queryFn: async () => {
@@ -116,10 +117,11 @@ function TrackableItemsPage() {
       }
       return r;
     },
-    enabled: false,
+    enabled: !!form.location_id && open,
     retry: false,
     staleTime: 5 * 60_000,
   });
+
 
   // Poll loop while a Toast report is pending.
   const pollQ = useQuery({
@@ -194,6 +196,22 @@ function TrackableItemsPage() {
       toast.error((e as Error).message);
     }
   };
+
+  // Auto-start Toast report when the dialog has loaded an empty cache for this location.
+  const autoStartedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!open || !form.location_id) return;
+    const d = menuQ.data;
+    if (!d || d.provider !== "toast") return;
+    if (d.status !== "not_started" && !(d.status === "ready" && d.items.length === 0)) return;
+    const key = `${form.location_id}:${d.status}`;
+    if (autoStartedRef.current === key) return;
+    autoStartedRef.current = key;
+    handleSync();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, form.location_id, menuQ.data?.status, menuQ.data?.provider]);
+
+
 
 
   const saveMut = useMutation({
