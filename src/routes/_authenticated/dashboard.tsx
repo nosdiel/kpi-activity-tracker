@@ -231,17 +231,17 @@ function DashboardPage() {
     return m;
   }, [lySalesQ.data]);
 
-  // Dessert running total within month, up to each date
-  const dessertCumulative = useMemo(() => {
+  // Focus Item running total within month, up to each date
+  const focusCumulative = useMemo(() => {
     const m = new Map<string, number>();
-    const sorted = (monthDessertQ.data ?? []).slice().sort((a, b) => a.business_date.localeCompare(b.business_date));
+    const sorted = (monthFocusQ.data ?? []).slice().sort((a, b) => a.business_date.localeCompare(b.business_date));
     let acc = 0;
     for (const r of sorted) {
       acc += Number(r.dessert_count ?? 0);
       m.set(r.business_date, acc);
     }
     return m;
-  }, [monthDessertQ.data]);
+  }, [monthFocusQ.data]);
 
   const rows = dates.map((d, i) => {
     const s = byDate.get(d);
