@@ -944,22 +944,25 @@ async function fetchToastMenuItems(
       const seen = new Set<string>();
       const menus: any[] = Array.isArray(body?.menus) ? body.menus : Array.isArray(body) ? body : [];
       for (const menu of menus) {
-        const menuName: string = menu?.name ?? "";
-        const walk = (grps: any[], path: string) => {
-          for (const g of grps ?? []) {
-            const gName = g?.name ?? "";
-            const pathHere = path || menuName;
-            for (const it of g?.menuItems ?? []) {
-              const id = String(it?.guid ?? it?.referenceId ?? it?.name ?? "").trim();
-              const name = String(it?.name ?? "").trim();
+        const menuName: string = String(menu?.name ?? "").trim();
+        const walk = (groups: any[], path: string) => {
+          for (const group of groups ?? []) {
+            const groupName = String(group?.name ?? "").trim();
+            const pathHere = groupName || path || menuName;
+            const items = group?.menuItems ?? group?.items ?? group?.menu_items ?? [];
+            for (const rawItem of items) {
+              const item = rawItem?.item ?? rawItem;
+              const id = String(item?.guid ?? item?.entityId ?? item?.referenceId ?? item?.externalId ?? item?.name ?? "").trim();
+              const name = String(item?.name ?? item?.displayName ?? "").trim();
               if (!id || !name || seen.has(id)) continue;
               seen.add(id);
-              out.push({ id, name, category: gName || pathHere || null });
+              out.push({ id, name, category: pathHere || null });
             }
-            if (Array.isArray(g?.menuGroups) && g.menuGroups.length) walk(g.menuGroups, pathHere);
+            const childGroups = group?.menuGroups ?? group?.groups ?? group?.subgroups ?? group?.subGroups ?? [];
+            if (Array.isArray(childGroups) && childGroups.length) walk(childGroups, pathHere);
           }
         };
-        walk(menu?.menuGroups ?? [], "");
+        walk(menu?.menuGroups ?? menu?.groups ?? [], "");
       }
       if (out.length > 0) {
         out.sort((a, b) => a.name.localeCompare(b.name));
