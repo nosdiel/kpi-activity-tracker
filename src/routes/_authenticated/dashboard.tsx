@@ -247,7 +247,7 @@ function DashboardPage() {
     const varCust = cust - lyCust;
     const lyAvg = lyCust > 0 ? ly / lyCust : 0;
     const actAvg = cust > 0 ? actual / cust : 0;
-    const focusItem = focusCumulative.get(d) ?? 0;
+    const focusItem = focusByDate.get(d) ?? 0;
     const hasActual = s && (s.actual_sales !== null || s.actual_customer_count !== null);
     return { date: d, day: dayNameFromISO(d), ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, focusItem, hasActual };
   });
