@@ -40,6 +40,7 @@ function UsersPage() {
   const createFn = useServerFn(createUserWithRole);
   const setRoleFn = useServerFn(setUserRole);
   const deleteFn = useServerFn(deleteUser);
+  const listFn = useServerFn(listUsers);
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
