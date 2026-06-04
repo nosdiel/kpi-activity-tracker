@@ -1,32 +1,363 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  syncSquare,
+  syncToast,
+  updateLocationPosCredentials,
+  getLocationsPosStatus,
+} from "@/lib/api/pos-sync.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/square")({
   head: () => ({ meta: [{ title: "Square Sync — NiNi KPI" }] }),
-  component: SquarePage,
+  component: () => <PosPage source="square" />,
 });
 
-function SquarePage() {
+type LocStatus = {
+  id: string;
+  name: string;
+  provider: "square" | "toast" | null;
+  square_location_id: string | null;
+  square_token_set: boolean;
+  toast_restaurant_guid: string | null;
+  toast_client_id: string | null;
+  toast_secret_set: boolean;
+};
+
+export function PosPage({ source }: { source: "square" | "toast" }) {
+  const qc = useQueryClient();
+  const syncFn = useServerFn(source === "square" ? syncSquare : syncToast);
+  const updateCreds = useServerFn(updateLocationPosCredentials);
+  const statusFn = useServerFn(getLocationsPosStatus);
+  const [date, setDate] = useState("");
+  const [editing, setEditing] = useState<LocStatus | null>(null);
+  const [form, setForm] = useState({
+    square_location_id: "",
+    square_access_token: "",
+    toast_restaurant_guid: "",
+    toast_client_id: "",
+    toast_client_secret: "",
+  });
+
+  const locsQ = useQuery({
+    queryKey: ["pos_status"],
+    queryFn: () => statusFn() as Promise<LocStatus[]>,
+  });
+
+  const logsQ = useQuery({
+    queryKey: ["pos_sync_log", source],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("pos_sync_log")
+        .select("*")
+        .eq("source", source)
+        .order("created_at", { ascending: false })
+        .limit(20);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const credsMut = useMutation({
+    mutationFn: async (payload: any) => updateCreds({ data: payload }),
+    onSuccess: () => {
+      toast.success("Saved");
+      setEditing(null);
+      qc.invalidateQueries({ queryKey: ["pos_status"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const syncMut = useMutation({
+    mutationFn: async (location_id?: string) =>
+      syncFn({ data: { business_date: date || undefined, location_id } }),
+    onSuccess: (res: any) => {
+      const ok = res.results.filter((r: any) => r.status === "ok").length;
+      const err = res.results.length - ok;
+      toast.success(`Synced ${ok} location(s)${err ? `, ${err} failed` : ""}`);
+      qc.invalidateQueries({ queryKey: ["pos_sync_log"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const title = source === "square" ? "Square Sync" : "Toast Sync";
+  const idLabel = source === "square" ? "Square Location ID" : "Toast Restaurant GUID";
+  const rows = (locsQ.data ?? []).filter(
+    (l) => l.provider === source || (source === "square" ? l.square_location_id : l.toast_restaurant_guid)
+  );
+
+  const openEdit = (loc: LocStatus) => {
+    setEditing(loc);
+    setForm({
+      square_location_id: loc.square_location_id ?? "",
+      square_access_token: "",
+      toast_restaurant_guid: loc.toast_restaurant_guid ?? "",
+      toast_client_id: loc.toast_client_id ?? "",
+      toast_client_secret: "",
+    });
+  };
+
+  const isReady = (loc: LocStatus) =>
+    source === "square"
+      ? Boolean(loc.square_location_id && loc.square_token_set)
+      : Boolean(loc.toast_restaurant_guid && loc.toast_client_id && loc.toast_secret_set);
+
   return (
     <div className="space-y-6">
       <div>
         <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">NiNi - KPI</p>
-        <h1 className="text-3xl font-bold tracking-tight text-foreground">Square Sync</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-foreground">{title}</h1>
+        <p className="text-sm text-muted-foreground mt-1">
+          Pull daily sales from {source === "square" ? "Square" : "Toast"} (production). Each
+          location has its own API credentials.
+        </p>
       </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>Not yet connected</CardTitle>
-          <CardDescription>Hook this up to pull daily sales from Square automatically.</CardDescription>
+          <CardTitle>Locations</CardTitle>
+          <CardDescription>
+            Add the {idLabel} and {source === "square" ? "access token" : "client ID + secret"} for
+            each location that uses {source === "square" ? "Square" : "Toast"}.
+          </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-3 text-sm text-muted-foreground">
-          <p>To enable Square import, you'll need to provide:</p>
-          <ul className="list-disc pl-5 space-y-1">
-            <li><strong>Square Access Token</strong> (from Square Developer Dashboard → Applications → Credentials)</li>
-            <li><strong>Square Location ID(s)</strong> (one per NiNi location you want to sync)</li>
-          </ul>
-          <p>Ask me to "wire up Square import" and I'll create a server function that pulls yesterday's sales for each linked location and upserts them into <code>daily_sales</code>.</p>
+        <CardContent className="space-y-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div>
+              <Label className="text-xs">Business date (defaults to yesterday)</Label>
+              <Input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-44"
+              />
+            </div>
+            <Button onClick={() => syncMut.mutate(undefined)} disabled={syncMut.isPending}>
+              {syncMut.isPending ? "Syncing..." : "Sync all"}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              Only locations with complete credentials are synced.
+            </p>
+          </div>
+
+          {locsQ.isLoading ? (
+            <p className="text-sm text-muted-foreground">Loading...</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Location</TableHead>
+                  <TableHead>{idLabel}</TableHead>
+                  <TableHead>Credentials</TableHead>
+                  <TableHead className="w-56 text-right"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(locsQ.data ?? []).map((loc) => {
+                  const externalId =
+                    source === "square" ? loc.square_location_id : loc.toast_restaurant_guid;
+                  const ready = isReady(loc);
+                  return (
+                    <TableRow key={loc.id}>
+                      <TableCell className="font-medium">{loc.name}</TableCell>
+                      <TableCell className="text-xs">{externalId ?? "—"}</TableCell>
+                      <TableCell>
+                        {ready ? (
+                          <Badge variant="default">Ready</Badge>
+                        ) : externalId || (source === "toast" && loc.toast_client_id) ? (
+                          <Badge variant="destructive">Incomplete</Badge>
+                        ) : (
+                          <Badge variant="secondary">Not set</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right space-x-2">
+                        <Button size="sm" variant="outline" onClick={() => openEdit(loc)}>
+                          {ready ? "Edit" : "Add credentials"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          onClick={() => syncMut.mutate(loc.id)}
+                          disabled={syncMut.isPending || !ready}
+                        >
+                          Sync
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Recent sync activity</CardTitle>
+          <CardDescription>Last 20 runs.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {(logsQ.data ?? []).length === 0 ? (
+            <p className="text-sm text-muted-foreground">No syncs yet.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>When</TableHead>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead>Message</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(logsQ.data ?? []).map((l: any) => (
+                  <TableRow key={l.id}>
+                    <TableCell className="text-xs">
+                      {new Date(l.created_at).toLocaleString()}
+                    </TableCell>
+                    <TableCell className="text-xs">{l.business_date}</TableCell>
+                    <TableCell>
+                      <Badge variant={l.status === "ok" ? "default" : "destructive"}>
+                        {l.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      {l.total_cents != null ? `$${(l.total_cents / 100).toFixed(2)}` : "—"}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground max-w-md truncate">
+                      {l.message ?? ""}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+        </CardContent>
+      </Card>
+
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {source === "square" ? "Square" : "Toast"} credentials — {editing?.name}
+            </DialogTitle>
+            <DialogDescription>
+              Secrets are stored encrypted on the server and never returned to the browser. Leave
+              a secret blank to keep the current value.
+            </DialogDescription>
+          </DialogHeader>
+
+          {source === "square" ? (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>Square Location ID</Label>
+                <Input
+                  value={form.square_location_id}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, square_location_id: e.target.value }))
+                  }
+                  placeholder="L0123ABCDEFGH"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  Square Access Token (production){" "}
+                  {editing?.square_token_set && (
+                    <span className="text-xs text-muted-foreground">— currently set</span>
+                  )}
+                </Label>
+                <Input
+                  type="password"
+                  value={form.square_access_token}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, square_access_token: e.target.value }))
+                  }
+                  placeholder="EAAA…"
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="space-y-2">
+                <Label>Toast Restaurant GUID</Label>
+                <Input
+                  value={form.toast_restaurant_guid}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, toast_restaurant_guid: e.target.value }))
+                  }
+                  placeholder="00000000-0000-0000-0000-000000000000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Toast Client ID</Label>
+                <Input
+                  value={form.toast_client_id}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, toast_client_id: e.target.value }))
+                  }
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  Toast Client Secret (production){" "}
+                  {editing?.toast_secret_set && (
+                    <span className="text-xs text-muted-foreground">— currently set</span>
+                  )}
+                </Label>
+                <Input
+                  type="password"
+                  value={form.toast_client_secret}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, toast_client_secret: e.target.value }))
+                  }
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              onClick={() => {
+                if (!editing) return;
+                const payload: any = { location_id: editing.id, provider: source };
+                if (source === "square") {
+                  payload.square_location_id = form.square_location_id;
+                  if (form.square_access_token) payload.square_access_token = form.square_access_token;
+                } else {
+                  payload.toast_restaurant_guid = form.toast_restaurant_guid;
+                  payload.toast_client_id = form.toast_client_id;
+                  if (form.toast_client_secret) payload.toast_client_secret = form.toast_client_secret;
+                }
+                credsMut.mutate(payload);
+              }}
+              disabled={credsMut.isPending}
+            >
+              {credsMut.isPending ? "Saving..." : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
