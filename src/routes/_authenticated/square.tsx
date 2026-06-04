@@ -306,6 +306,31 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
           ) : (
             <div className="space-y-3">
               <div className="space-y-2">
+                <Label>Credential set name</Label>
+                <Input
+                  value={form.toast_credential_name}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, toast_credential_name: e.target.value }))
+                  }
+                  placeholder="e.g. NiNi Manager"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Matches the credential set name in Toast Web (Integrations → API access).
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>API access URL</Label>
+                <Input
+                  value={form.toast_api_url}
+                  onChange={(e) => setForm((f) => ({ ...f, toast_api_url: e.target.value }))}
+                  placeholder={TOAST_DEFAULT_URL}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>API access type</Label>
+                <Input value="TOAST_MACHINE_CLIENT" readOnly disabled />
+              </div>
+              <div className="space-y-2">
                 <Label>Toast Restaurant GUID</Label>
                 <Input
                   value={form.toast_restaurant_guid}
@@ -316,7 +341,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                 />
               </div>
               <div className="space-y-2">
-                <Label>Toast Client ID</Label>
+                <Label>Client ID</Label>
                 <Input
                   value={form.toast_client_id}
                   onChange={(e) =>
@@ -327,7 +352,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
               </div>
               <div className="space-y-2">
                 <Label>
-                  Toast Client Secret (production){" "}
+                  Client secret (production){" "}
                   {editing?.toast_secret_set && (
                     <span className="text-xs text-muted-foreground">— currently set</span>
                   )}
@@ -339,6 +364,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                     setForm((f) => ({ ...f, toast_client_secret: e.target.value }))
                   }
                   autoComplete="off"
+                  placeholder="Paste secret (leave blank to keep current)"
                 />
               </div>
             </div>
@@ -353,6 +379,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                   payload.square_location_id = form.square_location_id;
                   if (form.square_access_token) payload.square_access_token = form.square_access_token;
                 } else {
+                  payload.toast_credential_name = form.toast_credential_name;
+                  payload.toast_api_url = form.toast_api_url || TOAST_DEFAULT_URL;
                   payload.toast_restaurant_guid = form.toast_restaurant_guid;
                   payload.toast_client_id = form.toast_client_id;
                   if (form.toast_client_secret) payload.toast_client_secret = form.toast_client_secret;
