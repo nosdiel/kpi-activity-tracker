@@ -346,7 +346,7 @@ async function toastDayTotalWithBase(
   for (const row of rows) {
     const amount = Number(row?.netSalesAmount ?? row?.grossSalesAmount ?? 0);
     if (Number.isFinite(amount)) totalCents += Math.round(amount * 100);
-    const guests = Number(row?.guestCount ?? row?.checkCount ?? row?.orderCount ?? 0);
+    const guests = Number(row?.guestCount ?? row?.ordersCount ?? 0);
     if (Number.isFinite(guests)) customerCount += guests;
   }
   return { totalCents, customerCount };
