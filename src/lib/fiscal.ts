@@ -22,9 +22,19 @@ export function quarterForPeriod(period: number): number {
   return Math.min(4, Math.floor((start - 1) / 13) + 1);
 }
 
+export function quarterForWeek(week: number): number {
+  return Math.min(4, Math.floor((week - 1) / 13) + 1);
+}
+
 export function quarterWeekRange(quarter: number): { start: number; end: number } {
   const start = (quarter - 1) * 13 + 1;
   return { start, end: start + 12 };
+}
+
+export function shiftISODate(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 
