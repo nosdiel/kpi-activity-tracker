@@ -51,6 +51,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   const syncFn = useServerFn(source === "square" ? syncSquare : syncToast);
   const updateCreds = useServerFn(updateLocationPosCredentials);
   const statusFn = useServerFn(getLocationsPosStatus);
+  const backfillFn = useServerFn(backfillActualSales);
   const [date, setDate] = useState("");
   const [editing, setEditing] = useState<LocStatus | null>(null);
   const [form, setForm] = useState({
