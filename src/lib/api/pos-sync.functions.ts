@@ -825,4 +825,120 @@ export const clearSyncErrors = createServerFn({ method: "POST" })
   });
 
 
+// -----------------------------------------------------------------------------
+// MENU ITEMS (for trackable item mapping)
+// -----------------------------------------------------------------------------
+
+type MenuItem = { id: string; name: string; category?: string | null };
+
+async function fetchSquareMenuItems(accessToken: string): Promise<MenuItem[]> {
+  const items: MenuItem[] = [];
+  let cursor: string | undefined;
+  do {
+    const url = new URL(`${SQUARE_BASE}/v2/catalog/list`);
+    url.searchParams.set("types", "ITEM");
+    if (cursor) url.searchParams.set("cursor", cursor);
+    const res = await fetch(url.toString(), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Square-Version": "2024-09-19",
+      },
+    });
+    if (!res.ok) throw new Error(`Square catalog ${res.status}: ${(await res.text()).slice(0, 240)}`);
+    const json = (await res.json()) as {
+      objects?: Array<{ id: string; item_data?: { name?: string; category_id?: string } }>;
+      cursor?: string;
+    };
+    for (const obj of json.objects ?? []) {
+      const name = obj.item_data?.name?.trim();
+      if (name) items.push({ id: obj.id, name, category: obj.item_data?.category_id ?? null });
+    }
+    cursor = json.cursor;
+  } while (cursor);
+  items.sort((a, b) => a.name.localeCompare(b.name));
+  return items;
+}
+
+async function fetchToastMenuItems(
+  base: string,
+  accessToken: string,
+  restaurantGuid: string
+): Promise<MenuItem[]> {
+  const res = await fetch(`${base}/menus/v2/menus`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      "Toast-Restaurant-External-ID": restaurantGuid,
+    },
+  });
+  if (!res.ok) throw new Error(`Toast menus ${res.status}: ${(await res.text()).slice(0, 240)}`);
+  const json = (await res.json()) as {
+    menus?: Array<{
+      name?: string;
+      menuGroups?: Array<{
+        name?: string;
+        menuItems?: Array<{ guid?: string; name?: string }>;
+        menuGroups?: Array<{ name?: string; menuItems?: Array<{ guid?: string; name?: string }> }>;
+      }>;
+    }>;
+  };
+  const out: MenuItem[] = [];
+  const seen = new Set<string>();
+  const pushItems = (items: Array<{ guid?: string; name?: string }> | undefined, cat: string) => {
+    for (const it of items ?? []) {
+      const name = it.name?.trim();
+      const id = it.guid;
+      if (!name || !id || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, name, category: cat });
+    }
+  };
+  for (const menu of json.menus ?? []) {
+    for (const g of menu.menuGroups ?? []) {
+      pushItems(g.menuItems, g.name ?? menu.name ?? "");
+      for (const sg of g.menuGroups ?? []) pushItems(sg.menuItems, sg.name ?? g.name ?? "");
+    }
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name));
+  return out;
+}
+
+export const listPosMenuItems = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z.object({ location_id: z.string().uuid() }).parse(input)
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const baseColumns =
+      "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret";
+    const extendedColumns = `${baseColumns},toast_api_url`;
+    let locRes = await supabaseAdmin.from("locations").select(extendedColumns).eq("id", data.location_id).maybeSingle();
+    if (locRes.error && isMissingToastMetadataColumn(locRes.error)) {
+      locRes = await supabaseAdmin.from("locations").select(baseColumns).eq("id", data.location_id).maybeSingle();
+    }
+    if (locRes.error) throw new Error(locRes.error.message);
+    const loc = locRes.data as any;
+    if (!loc) throw new Error("Location not found");
+
+    const provider: string | null = loc.pos_provider ?? null;
+    const hasSquare = !!(loc.square_access_token && loc.square_location_id);
+    const hasToast = !!(loc.toast_client_id && loc.toast_client_secret && loc.toast_restaurant_guid);
+
+    const use = provider === "square" ? "square" : provider === "toast" ? "toast" : hasSquare ? "square" : hasToast ? "toast" : null;
+    if (!use) return { provider: null as string | null, items: [] as MenuItem[] };
+
+    if (use === "square") {
+      if (!hasSquare) return { provider: "square", items: [] };
+      const items = await fetchSquareMenuItems(loc.square_access_token);
+      return { provider: "square", items };
+    }
+    if (!hasToast) return { provider: "toast", items: [] };
+    const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
+    const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+    const items = await fetchToastMenuItems(base, token, loc.toast_restaurant_guid);
+    return { provider: "toast", items };
+  });
+
+
+
 
