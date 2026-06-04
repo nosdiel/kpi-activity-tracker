@@ -369,7 +369,7 @@ export const getLocationsPosStatus = createServerFn({ method: "GET" })
     const { data, error } = await supabaseAdmin
       .from("locations")
       .select(
-        "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret"
+        "id,name,pos_provider,square_location_id,square_access_token,toast_credential_name,toast_api_url,toast_restaurant_guid,toast_client_id,toast_client_secret"
       )
       .order("name");
     if (error) throw new Error(error.message);
@@ -379,6 +379,8 @@ export const getLocationsPosStatus = createServerFn({ method: "GET" })
       provider: (l.pos_provider ?? null) as "square" | "toast" | null,
       square_location_id: l.square_location_id ?? null,
       square_token_set: Boolean(l.square_access_token),
+      toast_credential_name: l.toast_credential_name ?? null,
+      toast_api_url: l.toast_api_url ?? null,
       toast_restaurant_guid: l.toast_restaurant_guid ?? null,
       toast_client_id: l.toast_client_id ?? null,
       toast_secret_set: Boolean(l.toast_client_secret),
