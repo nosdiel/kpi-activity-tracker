@@ -36,10 +36,14 @@ type LocStatus = {
   provider: "square" | "toast" | null;
   square_location_id: string | null;
   square_token_set: boolean;
+  toast_credential_name: string | null;
+  toast_api_url: string | null;
   toast_restaurant_guid: string | null;
   toast_client_id: string | null;
   toast_secret_set: boolean;
 };
+
+const TOAST_DEFAULT_URL = "https://ws-api.toasttab.com";
 
 export function PosPage({ source }: { source: "square" | "toast" }) {
   const qc = useQueryClient();
@@ -51,6 +55,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   const [form, setForm] = useState({
     square_location_id: "",
     square_access_token: "",
+    toast_credential_name: "",
+    toast_api_url: TOAST_DEFAULT_URL,
     toast_restaurant_guid: "",
     toast_client_id: "",
     toast_client_secret: "",
