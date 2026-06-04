@@ -305,6 +305,7 @@ async function toastDayTotalWithBase(
         grossSalesAmount?: number;
         guestCount?: number;
         ordersCount?: number;
+        closedOrdersCount?: number;
       }>
     | null = null;
   let lastStatus = 0;
@@ -346,8 +347,10 @@ async function toastDayTotalWithBase(
   for (const row of rows) {
     const amount = Number(row?.netSalesAmount ?? row?.grossSalesAmount ?? 0);
     if (Number.isFinite(amount)) totalCents += Math.round(amount * 100);
-    const guests = Number(row?.guestCount ?? row?.ordersCount ?? 0);
-    if (Number.isFinite(guests)) customerCount += guests;
+    const guestCount = Number(row?.guestCount ?? 0);
+    const orderCount = Number(row?.ordersCount ?? row?.closedOrdersCount ?? 0);
+    const guests = guestCount > 0 ? guestCount : orderCount;
+    if (Number.isFinite(guests)) customerCount += Math.round(guests);
   }
   return { totalCents, customerCount };
 }
@@ -555,8 +558,14 @@ function isoDaysAgo(n: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function isoShiftDays(iso: string, days: number): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 // Pull historical daily sales from POS for the last N days (default 365).
-// Skips days that already have actual_sales > 0 so repeat runs are cheap.
+// Skips days that already have actual_sales and actual_customer_count populated so repeat runs are cheap.
 export const backfillSalesRange = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -566,6 +575,7 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
         days: z.number().int().min(1).max(730).optional(),
         start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
         end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+        include_last_year: z.boolean().optional(),
         location_id: z.string().uuid().optional(),
       })
       .parse(input)
@@ -584,11 +594,14 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
       for (let d = new Date(start); d <= end; d.setUTCDate(d.getUTCDate() + 1)) {
         dateList.push(d.toISOString().slice(0, 10));
       }
-      if (dateList.length > 730) throw new Error("Date range too large (max 730 days)");
     } else {
       const days = data.days ?? 365;
       dateList = Array.from({ length: days }, (_, i) => isoDaysAgo(i + 1));
     }
+    if (data.include_last_year) {
+      dateList = Array.from(new Set([...dateList, ...dateList.map((d) => isoShiftDays(d, -364))]));
+    }
+    if (dateList.length > 730) throw new Error("Date range too large (max 730 total days, including LY dates)");
     const days = dateList.length;
 
     let locs: any[] = [];
