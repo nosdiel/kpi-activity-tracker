@@ -12,6 +12,7 @@ type SyncResult = {
   business_date: string;
   status: "ok" | "error";
   total_cents?: number;
+  customer_count?: number;
   message?: string;
 };
 
@@ -37,15 +38,24 @@ async function upsertDailySales(
   location_id: string,
   business_date: string,
   total_cents: number,
-  source: "square" | "toast"
+  source: "square" | "toast",
+  customer_count: number
 ) {
   const actual_sales = Math.round(total_cents) / 100;
   const { error } = await supabaseAdmin.from("daily_sales").upsert(
-    { location_id, business_date, total_cents, actual_sales, source },
+    {
+      location_id,
+      business_date,
+      total_cents,
+      actual_sales,
+      actual_customer_count: customer_count,
+      source,
+    },
     { onConflict: "location_id,business_date" }
   );
   if (error) throw new Error(`daily_sales upsert: ${error.message}`);
 }
+
 
 // -----------------------------------------------------------------------------
 // SQUARE
