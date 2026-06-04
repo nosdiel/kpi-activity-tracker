@@ -23,6 +23,22 @@ async function assertAdmin(supabase: any, userId: string) {
   if (!data || data.length === 0) throw new Error("Forbidden: admin role required");
 }
 
+export const listUsers = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    await assertAdmin(supabase, userId);
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data, error } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 200 });
+    if (error) throw new Error(error.message);
+    return data.users.map((u) => ({
+      id: u.id,
+      email: u.email ?? "",
+      display_name: (u.user_metadata as { display_name?: string } | null)?.display_name ?? null,
+      created_at: u.created_at,
+    }));
+  });
+
 export const createUserWithRole = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) => CreateUserInput.parse(input))
