@@ -1258,7 +1258,7 @@ export const listPosMenuItems = createServerFn({ method: "POST" })
     // Toast: fetch the latest completed business day inline with a strict budget.
     const base = loc.toast_api_url || "https://ws-api.toasttab.com";
     try {
-      const accessToken = await fetchToastAccessToken(loc.toast_client_id, loc.toast_client_secret, base);
+      const accessToken = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
       const today = new Date();
       const compactDates: number[] = [];
       for (let i = 1; i <= 3; i++) {
