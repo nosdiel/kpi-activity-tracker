@@ -8,6 +8,7 @@ import {
   syncToast,
   updateLocationPosCredentials,
   getLocationsPosStatus,
+  backfillActualSales,
 } from "@/lib/api/pos-sync.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
