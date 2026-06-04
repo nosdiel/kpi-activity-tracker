@@ -248,7 +248,7 @@ async function toastDayTotalWithBase(
   accessToken: string,
   restaurantGuid: string,
   businessDate: string
-): Promise<number> {
+): Promise<{ totalCents: number; customerCount: number }> {
   // Toast Analytics API (async): POST a report request, then poll for results.
   // Docs: https://doc.toasttab.com/doc/devguide/apiAnalyticsMetricsReportingDataCreateRequest.html
   const compact = Number(businessDate.replace(/-/g, "")); // YYYYMMDD integer
@@ -299,7 +299,15 @@ async function toastDayTotalWithBase(
 
   // 2) Poll for results. Analytics jobs are async; small datasets return quickly.
   const deadline = Date.now() + 60_000;
-  let rows: Array<{ netSalesAmount?: number; grossSalesAmount?: number }> | null = null;
+  let rows:
+    | Array<{
+        netSalesAmount?: number;
+        grossSalesAmount?: number;
+        guestCount?: number;
+        checkCount?: number;
+        orderCount?: number;
+      }>
+    | null = null;
   let lastStatus = 0;
   let lastBody = "";
   while (Date.now() < deadline) {
@@ -333,14 +341,18 @@ async function toastDayTotalWithBase(
     );
   }
 
-  // 3) Sum net sales across returned rows.
+  // 3) Sum net sales and customer count across returned rows.
   let totalCents = 0;
+  let customerCount = 0;
   for (const row of rows) {
     const amount = Number(row?.netSalesAmount ?? row?.grossSalesAmount ?? 0);
     if (Number.isFinite(amount)) totalCents += Math.round(amount * 100);
+    const guests = Number(row?.guestCount ?? row?.checkCount ?? row?.orderCount ?? 0);
+    if (Number.isFinite(guests)) customerCount += guests;
   }
-  return totalCents;
+  return { totalCents, customerCount };
 }
+
 
 // keep older helpers referenced (suppress unused warnings)
 void toastAccessToken;
