@@ -56,10 +56,7 @@ function UsersPage() {
     queryFn: () => listFn(),
   });
   void supabase;
-  const _unused = (async () => {
-    return null;
-  });
-  });
+
 
   const rolesQ = useQuery({
     queryKey: ["user_roles"],
