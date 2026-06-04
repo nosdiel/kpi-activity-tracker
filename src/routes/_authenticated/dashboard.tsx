@@ -399,7 +399,7 @@ function DashboardPage() {
                   <Td right className={r.hasActual ? varClass(r.varCust) : "text-muted-foreground"}>
                     {r.hasActual ? num(r.varCust) : "—"}
                   </Td>
-                  <Td right>{num(r.dessertMonth)}</Td>
+                  <Td right>{num(r.focusItem)}</Td>
                 </tr>
               ))}
               <tr className="report-totals font-semibold">
@@ -413,7 +413,7 @@ function DashboardPage() {
                 <Td right>{num(totals.lyCust)}</Td>
                 <Td right>{num(totals.cust)}</Td>
                 <Td right className={varClass(totals.varCust)}>{num(totals.varCust)}</Td>
-                <Td right>{num0(totals.dessertMonth)}</Td>
+                <Td right>{num0(totals.focusItem)}</Td>
               </tr>
             </tbody>
           </table>
