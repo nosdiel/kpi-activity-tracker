@@ -860,22 +860,14 @@ async function fetchSquareMenuItems(accessToken: string): Promise<MenuItem[]> {
 }
 
 // Uses Toast Analytics API Menu Reporting (scope: enterprise-metrics:read).
-// Does NOT require Menus API or Configuration API scopes.
-async function fetchToastMenuItems(
+// `/era/v1/menu/day` requires startBusinessDate === endBusinessDate, so we
+// run one report per day and merge unique items.
+async function fetchToastMenuItemsForDay(
   base: string,
   accessToken: string,
-  restaurantGuid: string
-): Promise<MenuItem[]> {
-  // Look back ~60 days so we get all items sold recently.
-  const end = new Date();
-  const start = new Date();
-  start.setUTCDate(start.getUTCDate() - 60);
-  const toCompact = (d: Date) =>
-    Number(
-      `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
-    );
-
-  // Create the menu report request.
+  restaurantGuid: string,
+  compactDate: number
+): Promise<any[]> {
   let createRes: Response | null = null;
   let attempt = 0;
   for (;;) {
@@ -886,8 +878,8 @@ async function fetchToastMenuItems(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        startBusinessDate: toCompact(start),
-        endBusinessDate: toCompact(end),
+        startBusinessDate: compactDate,
+        endBusinessDate: compactDate,
         restaurantIds: [restaurantGuid],
         excludedRestaurantIds: [],
         groupBy: ["MENU_ITEM"],
@@ -914,40 +906,63 @@ async function fetchToastMenuItems(
     throw new Error(`Toast menu report: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
   }
 
-  // Poll for the report result.
-  const deadline = Date.now() + 90_000;
-  let rows: any[] | null = null;
-  let lastStatus = 0;
-  let lastBody = "";
+  const deadline = Date.now() + 60_000;
   while (Date.now() < deadline) {
     const getRes = await fetch(`${base}/era/v1/menu/${reportRequestGuid}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
-    lastStatus = getRes.status;
     if (getRes.status === 200) {
       const body = await getRes.json();
-      if (Array.isArray(body)) { rows = body; break; }
-      if (Array.isArray((body as any)?.data)) { rows = (body as any).data; break; }
-    } else if (getRes.status === 202 || getRes.status === 204) {
-      lastBody = (await getRes.text()).slice(0, 200);
-    } else {
+      if (Array.isArray(body)) return body;
+      if (Array.isArray((body as any)?.data)) return (body as any).data;
+      return [];
+    }
+    if (getRes.status !== 202 && getRes.status !== 204) {
       throw new Error(`Toast menu report get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`);
     }
     await new Promise((r) => setTimeout(r, 1500));
   }
-  if (!rows) {
-    throw new Error(`Toast menu report: not ready in time (last status ${lastStatus}${lastBody ? `: ${lastBody}` : ""})`);
+  throw new Error("Toast menu report: not ready in time");
+}
+
+async function fetchToastMenuItems(
+  base: string,
+  accessToken: string,
+  restaurantGuid: string
+): Promise<MenuItem[]> {
+  const toCompact = (d: Date) =>
+    Number(
+      `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
+    );
+
+  // Pull the last 14 days, one report per day, in parallel. Skip today (often not yet closed).
+  const days: number[] = [];
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date();
+    d.setUTCDate(d.getUTCDate() - i);
+    days.push(toCompact(d));
   }
+
+  const results = await Promise.allSettled(
+    days.map((d) => fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, d))
+  );
 
   const out: MenuItem[] = [];
   const seen = new Set<string>();
-  for (const row of rows) {
-    const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
-    const name = String(row?.menuItemName ?? "").trim();
-    if (!id || !name || seen.has(id)) continue;
-    seen.add(id);
-    out.push({ id, name, category: row?.menuGroupName ?? row?.salesCategory ?? null });
+  let lastErr = "";
+  let okCount = 0;
+  for (const r of results) {
+    if (r.status === "rejected") { lastErr = (r.reason as Error)?.message ?? String(r.reason); continue; }
+    okCount += 1;
+    for (const row of r.value) {
+      const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
+      const name = String(row?.menuItemName ?? "").trim();
+      if (!id || !name || seen.has(id)) continue;
+      seen.add(id);
+      out.push({ id, name, category: row?.menuGroupName ?? row?.salesCategory ?? null });
+    }
   }
+  if (okCount === 0 && lastErr) throw new Error(lastErr);
   out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
