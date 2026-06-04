@@ -1,7 +1,9 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
+import { listPosMenuItems } from "@/lib/api/pos-sync.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -11,10 +13,14 @@ import {
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Pencil, Trash2, Check, ChevronsUpDown, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
 
 export const Route = createFileRoute("/_authenticated/desserts")({
   head: () => ({ meta: [{ title: "Trackable Items — NiNi KPI" }] }),
@@ -87,6 +93,17 @@ function TrackableItemsPage() {
     (locationsQ.data ?? []).forEach((l) => m.set(l.id, l.name));
     return m;
   }, [locationsQ.data]);
+
+  const listMenuItems = useServerFn(listPosMenuItems);
+  const [posOpen, setPosOpen] = useState(false);
+  const menuQ = useQuery({
+    queryKey: ["pos-menu-items", form.location_id],
+    queryFn: () => listMenuItems({ data: { location_id: form.location_id } }),
+    enabled: open && !!form.location_id,
+    staleTime: 5 * 60_000,
+  });
+  const menuItems = menuQ.data?.items ?? [];
+
 
   const saveMut = useMutation({
     mutationFn: async (f: FormState) => {
@@ -242,13 +259,95 @@ function TrackableItemsPage() {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>POS product (optional)</Label>
-              <Input
-                value={form.pos_product}
-                onChange={(e) => setForm({ ...form, pos_product: e.target.value })}
-                placeholder="e.g. Chicken - Croquette"
-              />
+              <div className="flex items-center justify-between">
+                <Label>POS product mapping</Label>
+                {form.location_id && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => menuQ.refetch()}
+                    disabled={menuQ.isFetching}
+                  >
+                    <RefreshCw className={cn("h-3 w-3 mr-1", menuQ.isFetching && "animate-spin")} />
+                    Refresh menu
+                  </Button>
+                )}
+              </div>
+              {!form.location_id ? (
+                <p className="text-xs text-muted-foreground">Pick a location first to load its menu.</p>
+              ) : (
+                <Popover open={posOpen} onOpenChange={setPosOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between font-normal"
+                      disabled={menuQ.isLoading}
+                    >
+                      <span className="truncate">
+                        {menuQ.isLoading
+                          ? "Loading menu items..."
+                          : form.pos_product || "Select a POS menu item..."}
+                      </span>
+                      <ChevronsUpDown className="h-4 w-4 opacity-50 shrink-0" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search menu items..." />
+                      <CommandList>
+                        <CommandEmpty>
+                          {menuQ.error
+                            ? `Error: ${(menuQ.error as Error).message}`
+                            : menuItems.length === 0
+                            ? "No menu items found for this location."
+                            : "No match."}
+                        </CommandEmpty>
+                        <CommandGroup>
+                          {form.pos_product && (
+                            <CommandItem
+                              value="__clear__"
+                              onSelect={() => { setForm({ ...form, pos_product: "" }); setPosOpen(false); }}
+                            >
+                              <span className="text-muted-foreground">Clear mapping</span>
+                            </CommandItem>
+                          )}
+                          {menuItems.map((mi) => (
+                            <CommandItem
+                              key={mi.id}
+                              value={mi.name}
+                              onSelect={() => { setForm({ ...form, pos_product: mi.name }); setPosOpen(false); }}
+                            >
+                              <Check
+                                className={cn(
+                                  "mr-2 h-4 w-4",
+                                  form.pos_product === mi.name ? "opacity-100" : "opacity-0"
+                                )}
+                              />
+                              <div className="flex flex-col">
+                                <span>{mi.name}</span>
+                                {mi.category && (
+                                  <span className="text-xs text-muted-foreground">{mi.category}</span>
+                                )}
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              )}
+              <p className="text-xs text-muted-foreground">
+                {menuQ.data?.provider
+                  ? `Mapped to ${menuQ.data.provider.toUpperCase()} menu. Used to count quantity sold per day.`
+                  : "Pulls items from the location's POS (Square or Toast)."}
+              </p>
             </div>
+
             <DialogFooter>
               <Button type="button" variant="ghost" onClick={() => setOpen(false)}>Cancel</Button>
               <Button type="submit" disabled={saveMut.isPending}>
