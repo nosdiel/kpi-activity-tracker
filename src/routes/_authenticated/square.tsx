@@ -114,6 +114,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
     setForm({
       square_location_id: loc.square_location_id ?? "",
       square_access_token: "",
+      toast_credential_name: loc.toast_credential_name ?? "",
+      toast_api_url: loc.toast_api_url ?? TOAST_DEFAULT_URL,
       toast_restaurant_guid: loc.toast_restaurant_guid ?? "",
       toast_client_id: loc.toast_client_id ?? "",
       toast_client_secret: "",
