@@ -170,6 +170,13 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
             <Button onClick={() => syncMut.mutate(undefined)} disabled={syncMut.isPending}>
               {syncMut.isPending ? "Syncing..." : "Sync all"}
             </Button>
+            <Button
+              variant="outline"
+              onClick={() => backfillMut.mutate()}
+              disabled={backfillMut.isPending}
+            >
+              {backfillMut.isPending ? "Backfilling..." : "Backfill actual_sales"}
+            </Button>
             <p className="text-xs text-muted-foreground">
               Only locations with complete credentials are synced.
             </p>
