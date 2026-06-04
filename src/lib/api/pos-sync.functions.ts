@@ -1255,31 +1255,40 @@ export const listPosMenuItems = createServerFn({ method: "POST" })
 
     if (!hasToast) return { provider: "toast", items: [] as MenuItem[], error: "Toast credentials missing", job_id: null, status: "failed" as MenuListStatus };
 
-    // Toast: never block. Return the latest cached job. UI calls startToastMenuReportJob
-    // to actually kick a report off, then polls pollToastMenuReportJob.
-    const businessDate = yesterdayIsoUtc();
-    const existing = await supabaseAdmin
-      .from("toast_report_jobs")
-      .select("*")
-      .eq("location_id", data.location_id)
-      .eq("business_date", businessDate)
-      .eq("report_type", MENU_REPORT_TYPE)
-      .maybeSingle();
-    if (existing.data) {
-      if (existing.data.status === "ready") {
-        return { provider: "toast", items: rowsToMenuItems(existing.data.rows ?? []), error: null as string | null, job_id: existing.data.id, status: "ready" as MenuListStatus };
+    // Toast: fetch the latest completed business day inline with a strict budget.
+    const base = loc.toast_api_url || "https://ws-api.toasttab.com";
+    try {
+      const accessToken = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+      const today = new Date();
+      const compactDates: number[] = [];
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(today);
+        d.setUTCDate(d.getUTCDate() - i);
+        compactDates.push(
+          d.getUTCFullYear() * 10000 + (d.getUTCMonth() + 1) * 100 + d.getUTCDate()
+        );
       }
-      if (existing.data.status === "pending") {
-        return { provider: "toast", items: [] as MenuItem[], error: null as string | null, job_id: existing.data.id, status: "pending" as MenuListStatus };
+      let lastErr: Error | null = null;
+      for (const cd of compactDates) {
+        try {
+          const rows = await fetchToastMenuItemsForDayInline(base, accessToken, loc.toast_restaurant_guid, cd, 7_000);
+          const items = rowsToMenuItems(rows);
+          if (items.length > 0) {
+            return { provider: "toast", items, error: null as string | null, job_id: null, status: "ready" as MenuListStatus };
+          }
+        } catch (e) {
+          lastErr = e as Error;
+        }
       }
-      if (existing.data.status === "rate_limited") {
-        const waitS = Math.max(0, Math.ceil((new Date(existing.data.next_attempt_at).getTime() - Date.now()) / 1000));
-        return { provider: "toast", items: [] as MenuItem[], error: `Toast rate limit, try again in ${waitS}s.`, job_id: existing.data.id, status: "rate_limited" as MenuListStatus };
+      if (lastErr) {
+        return { provider: "toast", items: [] as MenuItem[], error: lastErr.message, job_id: null, status: "failed" as MenuListStatus };
       }
-      return { provider: "toast", items: [] as MenuItem[], error: existing.data.error ?? null, job_id: existing.data.id, status: "failed" as MenuListStatus };
+      return { provider: "toast", items: [] as MenuItem[], error: "No menu items returned by Toast Analytics for recent days.", job_id: null, status: "ready" as MenuListStatus };
+    } catch (e) {
+      return { provider: "toast", items: [] as MenuItem[], error: (e as Error).message, job_id: null, status: "failed" as MenuListStatus };
     }
-    return { provider: "toast", items: [] as MenuItem[], error: null as string | null, job_id: null, status: "not_started" as MenuListStatus };
   });
+
 
 // Returns per-day quantity sold across all active trackable items at a location,
 // pulled from Toast Analytics (per-day) for the requested business dates.
