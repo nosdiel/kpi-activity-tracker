@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import {
-  periodWeekRange,
   periodForWeek,
-  quarterForPeriod,
+  quarterForWeek,
+  quarterWeekRange,
+  shiftISODate,
   weekDates,
   currentFiscalWeek,
 } from "@/lib/fiscal";
@@ -53,6 +54,12 @@ const pctFmt = (n: number) => `${(n * 100).toFixed(2)}%`;
 const parseNum = (s: string) => {
   const n = parseFloat(s.replace(/[^0-9.\-]/g, ""));
   return Number.isFinite(n) ? n : 0;
+};
+const withFY2027 = (rows: FY[] = []) => {
+  if (rows.some((r) => r.fiscal_year === 2027)) return rows;
+  const fy2026 = rows.find((r) => r.fiscal_year === 2026);
+  const start_date = fy2026 ? shiftISODate(fy2026.start_date, 364) : "2026-12-27";
+  return [{ fiscal_year: 2027, start_date }, ...rows].sort((a, b) => b.fiscal_year - a.fiscal_year);
 };
 
 // Merge stored vendor list with defaults so defaults always appear (unless explicitly removed).
@@ -127,17 +134,19 @@ function WeeklyPnlPage() {
     if (!locationId && locationsQ.data?.[0]) setLocationId(locationsQ.data[0].id);
   }, [locationsQ.data, locationId]);
   useEffect(() => {
-    if (fy === null && fyQ.data?.[0]) {
-      setFy(fyQ.data[0].fiscal_year);
-      const cur = currentFiscalWeek(fyQ.data[0].start_date);
+    const years = withFY2027(fyQ.data ?? []);
+    if (fy === null && years[0]) {
+      setFy(years[0].fiscal_year);
+      const cur = currentFiscalWeek(years[0].start_date);
       setWeek(cur > 1 ? cur - 1 : cur);
     }
   }, [fyQ.data, fy]);
 
-  const fyRow = useMemo(() => fyQ.data?.find((r) => r.fiscal_year === fy) ?? null, [fyQ.data, fy]);
+  const fiscalYears = useMemo(() => withFY2027(fyQ.data ?? []), [fyQ.data]);
+  const fyRow = useMemo(() => fiscalYears.find((r) => r.fiscal_year === fy) ?? null, [fiscalYears, fy]);
   const period = week ? periodForWeek(week) : 1;
-  const quarter = quarterForPeriod(period);
-  const periodRange = periodWeekRange(period);
+  const quarter = week ? quarterForWeek(week) : 1;
+  const quarterRange = quarterWeekRange(quarter);
   const dates = useMemo(() => (fyRow && week ? weekDates(fyRow.start_date, week) : []), [fyRow, week]);
 
   // Weekly P&L row
