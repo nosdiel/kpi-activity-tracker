@@ -221,9 +221,23 @@ function DashboardPage() {
   const runSquareSync = useServerFn(syncSquare);
   useEffect(() => {
     if (!locationId || dates.length !== 7) return;
+    if (!salesQ.isSuccess) return; // wait until we know what's already stored
     let cancelled = false;
     const todayISO = new Date().toISOString().slice(0, 10);
-    const syncDates = dates.filter((d) => d <= todayISO);
+    const stored = new Map<string, DailySale>();
+    (salesQ.data ?? []).forEach((r) => stored.set(r.business_date, r));
+    // Only sync days that are missing data, OR today (still changing).
+    // Historical days with stored actuals are preserved; we don't overwrite
+    // them unless the user manually clicks Refresh / triggers a sync elsewhere.
+    const syncDates = dates.filter((d) => {
+      if (d > todayISO) return false;
+      if (d === todayISO) return true;
+      const row = stored.get(d);
+      const hasActual =
+        row && (Number(row.actual_sales ?? 0) > 0 || Number(row.total_cents ?? 0) > 0);
+      return !hasActual;
+    });
+    if (syncDates.length === 0) return;
     const sync = async () => {
       for (const d of syncDates) {
         if (cancelled) return;
@@ -240,7 +254,7 @@ function DashboardPage() {
     const id = setInterval(sync, SIX_HOURS);
     return () => { cancelled = true; clearInterval(id); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [locationId, dates[0], dates[6]]);
+  }, [locationId, dates[0], dates[6], salesQ.isSuccess]);
 
 
   const byDate = useMemo(() => {
