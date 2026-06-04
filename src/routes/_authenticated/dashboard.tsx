@@ -222,17 +222,13 @@ function DashboardPage() {
     return m;
   }, [lySalesQ.data]);
 
-  // Focus Item running total within month, up to each date
-  const focusCumulative = useMemo(() => {
+  // Focus Item: per-day quantity sold for active trackable items, from Toast Analytics.
+  const focusByDate = useMemo(() => {
     const m = new Map<string, number>();
-    const sorted = (monthFocusQ.data ?? []).slice().sort((a, b) => a.business_date.localeCompare(b.business_date));
-    let acc = 0;
-    for (const r of sorted) {
-      acc += Number(r.dessert_count ?? 0);
-      m.set(r.business_date, acc);
-    }
+    const src = focusDailyQ.data?.byDate ?? {};
+    for (const [d, q] of Object.entries(src)) m.set(d, Number(q) || 0);
     return m;
-  }, [monthFocusQ.data]);
+  }, [focusDailyQ.data]);
 
   const rows = dates.map((d, i) => {
     const s = byDate.get(d);
