@@ -58,6 +58,10 @@ const withFY2027 = (rows: FY[] = []) => {
   const start_date = fy2026 ? shiftISODate(fy2026.start_date, 364) : "2026-12-27";
   return [{ fiscal_year: 2027, start_date }, ...rows].sort((a, b) => b.fiscal_year - a.fiscal_year);
 };
+const defaultFiscalYear = (rows: FY[]) => {
+  const today = new Date().toISOString().slice(0, 10);
+  return rows.find((r) => r.start_date <= today) ?? rows[0];
+};
 
 function DashboardPage() {
   const [locationId, setLocationId] = useState<string>("");
@@ -97,7 +101,7 @@ function DashboardPage() {
   useEffect(() => {
     const years = withFY2027(fyQ.data ?? []);
     if (fy === null && years.length > 0) {
-      const latest = years[0];
+      const latest = defaultFiscalYear(years);
       setFy(latest.fiscal_year);
       setWeek(currentFiscalWeek(latest.start_date));
     }
