@@ -101,6 +101,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
       const err = res.results.length - ok;
       toast.success(`Synced ${ok} location(s)${err ? `, ${err} failed` : ""}`);
       qc.invalidateQueries({ queryKey: ["pos_sync_log"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-sales"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-ly-sales"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -109,6 +111,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
     mutationFn: async () => backfillFn() as Promise<{ scanned: number; updated: number }>,
     onSuccess: (res) => {
       toast.success(`Backfilled ${res.updated} row(s) (scanned ${res.scanned})`);
+      qc.invalidateQueries({ queryKey: ["dashboard-sales"] });
+      qc.invalidateQueries({ queryKey: ["dashboard-ly-sales"] });
     },
     onError: (e: Error) => toast.error(e.message),
   });
