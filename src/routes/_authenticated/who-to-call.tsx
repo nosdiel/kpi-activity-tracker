@@ -10,14 +10,15 @@ export const Route = createFileRoute("/_authenticated/who-to-call")({
       description="Vendor and emergency contacts."
       template={{
         location_id: "<uuid-or-null>",
-        vendor_name: "",
-        contact_name: "",
+        name: "",
+        contact_person: "",
         phone: "",
         email: "",
         category: "",
         notes: "",
+        active: true,
       }}
-      orderBy="vendor_name"
+      orderBy="name"
     />
   ),
 });
