@@ -127,8 +127,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   });
 
   const backfillRangeMut = useMutation({
-    mutationFn: async () =>
-      backfillRangeFn({ data: { source, days: 365 } }) as Promise<{
+    mutationFn: async (vars: { days?: number; start_date?: string; end_date?: string }) =>
+      backfillRangeFn({ data: { source, ...vars } }) as Promise<{
         days: number;
         processed: number;
         inserted: number;
@@ -145,6 +145,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
     },
     onError: (e: Error) => toast.error(e.message),
   });
+
 
   const title = source === "square" ? "Square Sync" : "Toast Sync";
   const idLabel = source === "square" ? "Square Location ID" : "Toast Restaurant GUID";
