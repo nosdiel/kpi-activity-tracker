@@ -180,8 +180,8 @@ function DashboardPage() {
     },
   });
 
-  const monthDessertQ = useQuery({
-    queryKey: ["dashboard-dessert-month", locationId, monthStart],
+  const monthFocusQ = useQuery({
+    queryKey: ["dashboard-focus-item", locationId, monthStart],
     enabled: !!locationId && !!monthStart,
     queryFn: async () => {
       const start = `${monthStart}-01`;
