@@ -261,6 +261,21 @@ function DashboardPage() {
     },
     { ly: 0, lyCust: 0, actual: 0, cust: 0, target: 0, varSales: 0, varCust: 0, focusItem: 0 },
   );
+  // Week-to-date totals for the bottom stat cards: only include days up to today
+  // (and days where we have actual data), so comparisons reflect progress so far.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const wtdRows = rows.filter((r) => r.date <= todayISO && r.hasActual);
+  const wtd = wtdRows.reduce(
+    (a, r) => {
+      a.ly += r.ly; a.lyCust += r.lyCust; a.actual += r.actual; a.cust += r.cust;
+      a.target += r.target; a.varSales += r.varSales; a.varCust += r.varCust;
+      return a;
+    },
+    { ly: 0, lyCust: 0, actual: 0, cust: 0, target: 0, varSales: 0, varCust: 0 },
+  );
+  const wtdLyAvg = wtd.lyCust > 0 ? wtd.ly / wtd.lyCust : 0;
+  const wtdActAvg = wtd.cust > 0 ? wtd.actual / wtd.cust : 0;
+  const wtdAvgVariance = wtdActAvg - wtdLyAvg;
   const lyAvgTotal = totals.lyCust > 0 ? totals.ly / totals.lyCust : 0;
   const actAvgTotal = totals.cust > 0 ? totals.actual / totals.cust : 0;
   const avgVariance = actAvgTotal - lyAvgTotal;
