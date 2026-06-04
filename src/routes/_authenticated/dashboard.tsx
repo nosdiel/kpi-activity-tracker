@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMemo, useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw, Printer } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getTrackableItemDailyQuantity } from "@/lib/api/pos-sync.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -180,23 +182,12 @@ function DashboardPage() {
     },
   });
 
-  const monthFocusQ = useQuery({
-    queryKey: ["dashboard-focus-item", locationId, monthStart],
-    enabled: !!locationId && !!monthStart,
-    queryFn: async () => {
-      const start = `${monthStart}-01`;
-      const endDate = new Date(`${start}T00:00:00Z`);
-      endDate.setUTCMonth(endDate.getUTCMonth() + 1);
-      const end = endDate.toISOString().slice(0, 10);
-      const { data, error } = await supabase
-        .from("daily_sales")
-        .select("business_date,dessert_count")
-        .eq("location_id", locationId)
-        .gte("business_date", start)
-        .lt("business_date", end);
-      if (error) throw error;
-      return (data ?? []) as { business_date: string; dessert_count: number | null }[];
-    },
+  const fetchFocusQty = useServerFn(getTrackableItemDailyQuantity);
+  const focusDailyQ = useQuery({
+    queryKey: ["dashboard-focus-daily", locationId, dates[0], dates[6]],
+    enabled: !!locationId && dates.length === 7,
+    queryFn: () => fetchFocusQty({ data: { location_id: locationId, dates } }),
+    staleTime: 5 * 60_000,
   });
 
   const targetQ = useQuery({
@@ -231,17 +222,13 @@ function DashboardPage() {
     return m;
   }, [lySalesQ.data]);
 
-  // Focus Item running total within month, up to each date
-  const focusCumulative = useMemo(() => {
+  // Focus Item: per-day quantity sold for active trackable items, from Toast Analytics.
+  const focusByDate = useMemo(() => {
     const m = new Map<string, number>();
-    const sorted = (monthFocusQ.data ?? []).slice().sort((a, b) => a.business_date.localeCompare(b.business_date));
-    let acc = 0;
-    for (const r of sorted) {
-      acc += Number(r.dessert_count ?? 0);
-      m.set(r.business_date, acc);
-    }
+    const src = focusDailyQ.data?.byDate ?? {};
+    for (const [d, q] of Object.entries(src)) m.set(d, Number(q) || 0);
     return m;
-  }, [monthFocusQ.data]);
+  }, [focusDailyQ.data]);
 
   const rows = dates.map((d, i) => {
     const s = byDate.get(d);
@@ -260,7 +247,7 @@ function DashboardPage() {
     const varCust = cust - lyCust;
     const lyAvg = lyCust > 0 ? ly / lyCust : 0;
     const actAvg = cust > 0 ? actual / cust : 0;
-    const focusItem = focusCumulative.get(d) ?? 0;
+    const focusItem = focusByDate.get(d) ?? 0;
     const hasActual = s && (s.actual_sales !== null || s.actual_customer_count !== null);
     return { date: d, day: dayNameFromISO(d), ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, focusItem, hasActual };
   });
@@ -269,7 +256,7 @@ function DashboardPage() {
     (a, r) => {
       a.ly += r.ly; a.lyCust += r.lyCust; a.actual += r.actual; a.cust += r.cust;
       a.target += r.target; a.varSales += r.varSales; a.varCust += r.varCust;
-      a.focusItem = r.focusItem || a.focusItem;
+      a.focusItem += r.focusItem;
       return a;
     },
     { ly: 0, lyCust: 0, actual: 0, cust: 0, target: 0, varSales: 0, varCust: 0, focusItem: 0 },
@@ -293,7 +280,7 @@ function DashboardPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => { salesQ.refetch(); lySalesQ.refetch(); targetQ.refetch(); monthFocusQ.refetch(); }}>
+          <Button variant="outline" size="sm" onClick={() => { salesQ.refetch(); lySalesQ.refetch(); targetQ.refetch(); focusDailyQ.refetch(); }}>
             <RefreshCw className="h-4 w-4 mr-2" /> Refresh
           </Button>
           <Button variant="outline" size="sm" onClick={() => window.print()}>
