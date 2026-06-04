@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { createUserWithRole, setUserRole, deleteUser, listUsers } from "@/lib/api/users.functions";
+import { createUserWithRole, setUserRole, deleteUser, listUsers, setUserPassword } from "@/lib/api/users.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,9 @@ function UsersPage() {
   const setRoleFn = useServerFn(setUserRole);
   const deleteFn = useServerFn(deleteUser);
   const listFn = useServerFn(listUsers);
+  const passwordFn = useServerFn(setUserPassword);
+  const [pwTarget, setPwTarget] = useState<{ id: string; label: string } | null>(null);
+  const [pwValue, setPwValue] = useState("");
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({
@@ -108,6 +111,17 @@ function UsersPage() {
     onSuccess: () => {
       toast.success("User deleted");
       invalidate();
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const passwordMut = useMutation({
+    mutationFn: ({ target_user_id, password }: { target_user_id: string; password: string }) =>
+      passwordFn({ data: { target_user_id, password } }),
+    onSuccess: () => {
+      toast.success("Password updated");
+      setPwTarget(null);
+      setPwValue("");
     },
     onError: (e: Error) => toast.error(e.message),
   });
@@ -259,7 +273,17 @@ function UsersPage() {
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right space-x-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setPwValue("");
+                            setPwTarget({ id: uid, label });
+                          }}
+                        >
+                          Set password
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -278,6 +302,40 @@ function UsersPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={!!pwTarget} onOpenChange={(o) => !o && setPwTarget(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Set password</DialogTitle>
+            <DialogDescription>
+              Set a new password for {pwTarget?.label}. Super admin only.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (pwTarget) passwordMut.mutate({ target_user_id: pwTarget.id, password: pwValue });
+            }}
+          >
+            <div className="space-y-2">
+              <Label>New password</Label>
+              <Input
+                type="text"
+                minLength={8}
+                required
+                value={pwValue}
+                onChange={(e) => setPwValue(e.target.value)}
+              />
+            </div>
+            <DialogFooter>
+              <Button type="submit" disabled={passwordMut.isPending}>
+                {passwordMut.isPending ? "Saving..." : "Update password"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
