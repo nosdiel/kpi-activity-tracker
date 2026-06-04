@@ -280,19 +280,14 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                supabase
-                  .from("pos_sync_log")
-                  .delete()
-                  .eq("source", source)
-                  .eq("status", "error")
-                  .then(({ error }) => {
-                    if (error) toast.error(error.message);
-                    else {
-                      toast.success("Errors cleared");
-                      qc.invalidateQueries({ queryKey: ["pos_sync_log"] });
-                    }
-                  });
+              onClick={async () => {
+                try {
+                  const res = await clearErrorsFn({ data: { source } });
+                  toast.success(`Cleared ${res.deleted} error(s)`);
+                  qc.invalidateQueries({ queryKey: ["pos_sync_log"] });
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
               }}
             >
               Clear errors
