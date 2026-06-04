@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { createUserWithRole, setUserRole, deleteUser, listUsers } from "@/lib/api/users.functions";
+import { createUserWithRole, setUserRole, deleteUser, listUsers, setUserPassword } from "@/lib/api/users.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
