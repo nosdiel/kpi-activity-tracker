@@ -10,6 +10,7 @@ import {
   getLocationsPosStatus,
   backfillActualSales,
   backfillSalesRange,
+  clearSyncErrors,
 } from "@/lib/api/pos-sync.functions";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -54,6 +55,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   const statusFn = useServerFn(getLocationsPosStatus);
   const backfillFn = useServerFn(backfillActualSales);
   const backfillRangeFn = useServerFn(backfillSalesRange);
+  const clearErrorsFn = useServerFn(clearSyncErrors);
   const [date, setDate] = useState("");
   const [editing, setEditing] = useState<LocStatus | null>(null);
   const [form, setForm] = useState({
@@ -278,19 +280,14 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
             <Button
               variant="outline"
               size="sm"
-              onClick={() => {
-                supabase
-                  .from("pos_sync_log")
-                  .delete()
-                  .eq("source", source)
-                  .eq("status", "error")
-                  .then(({ error }) => {
-                    if (error) toast.error(error.message);
-                    else {
-                      toast.success("Errors cleared");
-                      qc.invalidateQueries({ queryKey: ["pos_sync_log"] });
-                    }
-                  });
+              onClick={async () => {
+                try {
+                  const res = await clearErrorsFn({ data: { source } });
+                  toast.success(`Cleared ${res.deleted} error(s)`);
+                  qc.invalidateQueries({ queryKey: ["pos_sync_log"] });
+                } catch (e) {
+                  toast.error((e as Error).message);
+                }
               }}
             >
               Clear errors

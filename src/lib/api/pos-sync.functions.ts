@@ -648,4 +648,21 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
     return { ok: true, days, processed, inserted, errors };
   });
 
+export const clearSyncErrors = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: { source: "square" | "toast" }) =>
+    z.object({ source: z.enum(["square", "toast"]) }).parse(input)
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error, count } = await supabaseAdmin
+      .from("pos_sync_log")
+      .delete({ count: "exact" })
+      .eq("source", data.source)
+      .eq("status", "error");
+    if (error) throw new Error(error.message);
+    return { deleted: count ?? 0 };
+  });
+
+
 
