@@ -238,7 +238,7 @@ async function toastAccessTokenWithBase(
   clientId: string,
   clientSecret: string
 ): Promise<string> {
-  const res = await fetch(`${base}/authentication/v1/authentication/login`, {
+  const res = await fetchWithTimeout(`${base}/authentication/v1/authentication/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -246,7 +246,7 @@ async function toastAccessTokenWithBase(
       clientSecret,
       userAccessType: "TOAST_MACHINE_CLIENT",
     }),
-  });
+  }, 4_000);
   if (!res.ok) {
     throw new Error(`Toast auth ${res.status}: ${(await res.text()).slice(0, 240)}`);
   }
@@ -831,6 +831,19 @@ export const clearSyncErrors = createServerFn({ method: "POST" })
 
 type MenuItem = { id: string; name: string; category?: string | null };
 
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (e) {
+    if ((e as Error).name === "AbortError") throw new Error("Toast Analytics request timed out");
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function fetchSquareMenuItems(accessToken: string): Promise<MenuItem[]> {
   const items: MenuItem[] = [];
   let cursor: string | undefined;
@@ -866,12 +879,13 @@ async function fetchToastMenuItemsForDay(
   base: string,
   accessToken: string,
   restaurantGuid: string,
-  compactDate: number
+  compactDate: number,
+  pollBudgetMs = 10_000
 ): Promise<any[]> {
   let createRes: Response | null = null;
   let attempt = 0;
   for (;;) {
-    createRes = await fetch(`${base}/era/v1/menu/day`, {
+    createRes = await fetchWithTimeout(`${base}/era/v1/menu/day`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -884,10 +898,10 @@ async function fetchToastMenuItemsForDay(
         excludedRestaurantIds: [],
         groupBy: ["MENU_ITEM"],
       }),
-    });
-    if (createRes.status !== 429 || attempt >= 5) break;
+    }, 5_000);
+    if (createRes.status !== 429 || attempt >= 1) break;
     const ra = Number(createRes.headers.get("retry-after"));
-    const waitMs = Number.isFinite(ra) && ra > 0 ? ra * 1000 : Math.min(30_000, 2000 * 2 ** attempt);
+    const waitMs = Number.isFinite(ra) && ra > 0 ? Math.min(ra * 1000, 2_000) : 1_000;
     await new Promise((r) => setTimeout(r, waitMs));
     attempt += 1;
   }
@@ -906,11 +920,11 @@ async function fetchToastMenuItemsForDay(
     throw new Error(`Toast menu report: missing reportRequestGuid (${createdRaw.slice(0, 200)})`);
   }
 
-  const deadline = Date.now() + 30_000;
+  const deadline = Date.now() + pollBudgetMs;
   while (Date.now() < deadline) {
-    const getRes = await fetch(`${base}/era/v1/menu/${reportRequestGuid}`, {
+    const getRes = await fetchWithTimeout(`${base}/era/v1/menu/${reportRequestGuid}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    }, 5_000);
     if (getRes.status === 200) {
       const body = await getRes.json();
       if (Array.isArray(body)) return body;
@@ -920,7 +934,7 @@ async function fetchToastMenuItemsForDay(
     if (getRes.status !== 202 && getRes.status !== 204) {
       throw new Error(`Toast menu report get ${getRes.status}: ${(await getRes.text()).slice(0, 240)}`);
     }
-    await new Promise((r) => setTimeout(r, 600));
+    await new Promise((r) => setTimeout(r, 750));
   }
   throw new Error("Toast menu report: not ready in time");
 }
@@ -931,37 +945,25 @@ async function fetchToastMenuItems(
   restaurantGuid: string
 ): Promise<MenuItem[]> {
   // Use Toast Analytics API Menu Reporting only (scope: enterprise-metrics:read).
-  // Try the most recent business days until we get items, bounded tight to
-  // avoid upstream request timeouts.
+  // Try the most recent completed business day only. Analytics reports can
+  // take longer than the server request limit, so this path must return fast.
   const toCompact = (d: Date) =>
     Number(
       `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`
     );
-  const days: number[] = [];
-  for (let i = 1; i <= 2; i++) {
-    const d = new Date();
-    d.setUTCDate(d.getUTCDate() - i);
-    days.push(toCompact(d));
-  }
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() - 1);
+  const day = toCompact(d);
   const out: MenuItem[] = [];
   const seen = new Set<string>();
-  let lastErr = "";
-  for (const day of days) {
-    try {
-      const rows = await fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, day);
-      for (const row of rows) {
-        const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
-        const name = String(row?.menuItemName ?? "").trim();
-        if (!id || !name || seen.has(id)) continue;
-        seen.add(id);
-        out.push({ id, name, category: row?.menuGroupName ?? row?.salesCategory ?? null });
-      }
-      if (out.length > 0) break;
-    } catch (e) {
-      lastErr = (e as Error).message;
-    }
+  const rows = await fetchToastMenuItemsForDay(base, accessToken, restaurantGuid, day, 6_000);
+  for (const row of rows) {
+    const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
+    const name = String(row?.menuItemName ?? "").trim();
+    if (!id || !name || seen.has(id)) continue;
+    seen.add(id);
+    out.push({ id, name, category: row?.menuGroupName ?? row?.salesCategory ?? null });
   }
-  if (out.length === 0 && lastErr) throw new Error(lastErr);
   out.sort((a, b) => a.name.localeCompare(b.name));
   return out;
 }
