@@ -54,6 +54,19 @@ async function upsertDailySales(
     { onConflict: "location_id,business_date" }
   );
   if (error) throw new Error(`daily_sales upsert: ${error.message}`);
+
+  const nextYearDate = isoShiftDays(business_date, 364);
+  const { error: lyError } = await supabaseAdmin.from("daily_sales").upsert(
+    {
+      location_id,
+      business_date: nextYearDate,
+      last_year_sales: actual_sales,
+      last_year_customer_count: customer_count,
+      source,
+    },
+    { onConflict: "location_id,business_date" }
+  );
+  if (lyError) throw new Error(`daily_sales LY upsert: ${lyError.message}`);
 }
 
 
