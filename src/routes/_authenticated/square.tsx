@@ -249,14 +249,14 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                   toast.error("Pick both start and end dates");
                   return;
                 }
-                backfillRangeMut.mutate({ start_date: startDate, end_date: endDate });
+                backfillRangeMut.mutate({ start_date: startDate, end_date: endDate, include_last_year: true });
               }}
               disabled={backfillRangeMut.isPending}
             >
-              {backfillRangeMut.isPending ? "Backfilling..." : "Backfill date range"}
+              {backfillRangeMut.isPending ? "Backfilling..." : "Backfill date range + LY"}
             </Button>
             <p className="text-xs text-muted-foreground">
-              Backfills sales and guest counts; the 365-day button also pulls matching LY Sales dates.
+              Pulls the selected dates and the same weekdays last year for LY Sales.
             </p>
           </div>
 
