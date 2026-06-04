@@ -261,6 +261,21 @@ function DashboardPage() {
     },
     { ly: 0, lyCust: 0, actual: 0, cust: 0, target: 0, varSales: 0, varCust: 0, focusItem: 0 },
   );
+  // Week-to-date totals for the bottom stat cards: only include days up to today
+  // (and days where we have actual data), so comparisons reflect progress so far.
+  const todayISO = new Date().toISOString().slice(0, 10);
+  const wtdRows = rows.filter((r) => r.date <= todayISO && r.hasActual);
+  const wtd = wtdRows.reduce(
+    (a, r) => {
+      a.ly += r.ly; a.lyCust += r.lyCust; a.actual += r.actual; a.cust += r.cust;
+      a.target += r.target; a.varSales += r.varSales; a.varCust += r.varCust;
+      return a;
+    },
+    { ly: 0, lyCust: 0, actual: 0, cust: 0, target: 0, varSales: 0, varCust: 0 },
+  );
+  const wtdLyAvg = wtd.lyCust > 0 ? wtd.ly / wtd.lyCust : 0;
+  const wtdActAvg = wtd.cust > 0 ? wtd.actual / wtd.cust : 0;
+  const wtdAvgVariance = wtdActAvg - wtdLyAvg;
   const lyAvgTotal = totals.lyCust > 0 ? totals.ly / totals.lyCust : 0;
   const actAvgTotal = totals.cust > 0 ? totals.actual / totals.cust : 0;
   const avgVariance = actAvgTotal - lyAvgTotal;
@@ -408,9 +423,9 @@ function DashboardPage() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-3 report-stat-grid">
-        <Stat label="Sales Target" value={money(totals.target)} variance={totals.varSales} varianceLabel={money(totals.varSales)} pct={totals.target > 0 ? totals.varSales / totals.target : 0} />
-        <Stat label="LY Avg" value={money(lyAvgTotal)} variance={avgVariance} varianceLabel={money(avgVariance)} pct={lyAvgTotal > 0 ? avgVariance / lyAvgTotal : 0} />
-        <Stat label="LY Cust" value={num(totals.lyCust)} variance={totals.varCust} varianceLabel={num(totals.varCust)} pct={totals.lyCust > 0 ? totals.varCust / totals.lyCust : 0} />
+        <Stat label="Sales Target (WTD)" value={money(wtd.target)} variance={wtd.varSales} varianceLabel={money(wtd.varSales)} pct={wtd.target > 0 ? wtd.varSales / wtd.target : 0} />
+        <Stat label="LY Avg (WTD)" value={money(wtdLyAvg)} variance={wtdAvgVariance} varianceLabel={money(wtdAvgVariance)} pct={wtdLyAvg > 0 ? wtdAvgVariance / wtdLyAvg : 0} />
+        <Stat label="LY Cust (WTD)" value={num(wtd.lyCust)} variance={wtd.varCust} varianceLabel={num(wtd.varCust)} pct={wtd.lyCust > 0 ? wtd.varCust / wtd.lyCust : 0} />
       </div>
 
       {salesQ.error && <p className="text-sm text-destructive">{(salesQ.error as Error).message}</p>}
