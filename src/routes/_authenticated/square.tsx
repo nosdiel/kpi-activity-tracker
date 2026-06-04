@@ -127,7 +127,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
   });
 
   const backfillRangeMut = useMutation({
-    mutationFn: async (vars: { days?: number; start_date?: string; end_date?: string; include_last_year?: boolean }) =>
+    mutationFn: async (vars: { days?: number; start_date?: string; end_date?: string; include_last_year?: boolean; include_current_week_last_year?: boolean }) =>
       backfillRangeFn({ data: { source, ...vars } }) as Promise<{
         days: number;
         processed: number;
@@ -213,7 +213,7 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
             </Button>
             <Button
               variant="secondary"
-              onClick={() => backfillRangeMut.mutate({ days: 365, include_last_year: true })}
+              onClick={() => backfillRangeMut.mutate({ days: 365, include_last_year: true, include_current_week_last_year: true })}
               disabled={backfillRangeMut.isPending}
             >
               {backfillRangeMut.isPending ? "Backfilling..." : "Backfill last 365 days + LY"}
