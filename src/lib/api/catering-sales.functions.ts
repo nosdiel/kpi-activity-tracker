@@ -6,6 +6,50 @@ const SQUARE_BASE = "https://connect.squareup.com";
 const TOAST_BASE = "https://ws-api.toasttab.com";
 
 type CateringDay = { location_id: string; business_date: string; amount: number };
+type ToastDiningMetricsRow = {
+  businessDate?: string | number;
+  diningOption?: string | null;
+  netSalesAmount?: number;
+  grossSalesAmount?: number;
+};
+
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 12_000): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function minISO(a: string, b: string): string {
+  return a <= b ? a : b;
+}
+
+function isoFromToastBusinessDate(value: string | number | undefined): string {
+  const raw = String(value ?? "");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw;
+  const compact = raw.replace(/\D/g, "");
+  return /^\d{8}$/.test(compact) ? `${compact.slice(0, 4)}-${compact.slice(4, 6)}-${compact.slice(6, 8)}` : "";
+}
+
+function compactBusinessDate(iso: string): number {
+  return Number(iso.replace(/-/g, ""));
+}
+
+function toastMetricsRange(startISO: string, endISO: string): "week" | "month" | "year" {
+  const start = new Date(`${startISO}T00:00:00Z`).getTime();
+  const end = new Date(`${endISO}T00:00:00Z`).getTime();
+  const inclusiveDays = Math.floor((end - start) / 86_400_000) + 1;
+  if (inclusiveDays <= 7) return "week";
+  if (inclusiveDays <= 31) return "month";
+  return "year";
+}
 
 function isoRangeDates(startISO: string, endISO: string): string[] {
   const out: string[] = [];
@@ -20,13 +64,13 @@ function isoRangeDates(startISO: string, endISO: string): string[] {
 function pickToastCreds(loc: any): { clientId: string; clientSecret: string } | null {
   const std = { clientId: loc?.toast_client_id as string | null, clientSecret: loc?.toast_client_secret as string | null };
   const ana = { clientId: loc?.toast_analytics_client_id as string | null, clientSecret: loc?.toast_analytics_client_secret as string | null };
-  const chosen = std.clientId && std.clientSecret ? std : ana;
+  const chosen = ana.clientId && ana.clientSecret ? ana : std;
   if (!chosen.clientId || !chosen.clientSecret) return null;
   return { clientId: chosen.clientId!, clientSecret: chosen.clientSecret! };
 }
 
 async function toastAccessToken(base: string, clientId: string, clientSecret: string): Promise<string> {
-  const res = await fetch(`${base}/authentication/v1/authentication/login`, {
+  const res = await fetchWithTimeout(`${base}/authentication/v1/authentication/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ clientId, clientSecret, userAccessType: "TOAST_MACHINE_CLIENT" }),
@@ -39,7 +83,7 @@ async function toastAccessToken(base: string, clientId: string, clientSecret: st
 }
 
 async function toastCateringDiningOptionGuids(base: string, accessToken: string, restaurantGuid: string): Promise<Set<string>> {
-  const res = await fetch(`${base}/config/v2/diningOptions`, {
+  const res = await fetchWithTimeout(`${base}/config/v2/diningOptions`, {
     headers: { Authorization: `Bearer ${accessToken}`, "Toast-Restaurant-External-ID": restaurantGuid },
   });
   if (!res.ok) throw new Error(`Toast diningOptions ${res.status}: ${(await res.text()).slice(0, 240)}`);
@@ -51,6 +95,86 @@ async function toastCateringDiningOptionGuids(base: string, accessToken: string,
   return set;
 }
 
+async function createToastDiningMetricsReport(
+  base: string,
+  accessToken: string,
+  restaurantGuid: string,
+  startDate: string,
+  endDate: string
+): Promise<string> {
+  const range = toastMetricsRange(startDate, endDate);
+  const res = await fetchWithTimeout(
+    `${base}/era/v1/metrics/${range}`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        startBusinessDate: compactBusinessDate(startDate),
+        endBusinessDate: compactBusinessDate(endDate),
+        restaurantIds: [restaurantGuid],
+        excludedRestaurantIds: [],
+        groupBy: ["DINING_OPTION"],
+      }),
+    },
+    8_000
+  );
+  if (!res.ok) throw new Error(`Toast dining metrics create ${range} ${res.status}: ${(await res.text()).slice(0, 240)}`);
+  const raw = await res.text();
+  let guid = "";
+  try {
+    const parsed = JSON.parse(raw);
+    guid = typeof parsed === "string" ? parsed : (parsed?.reportRequestGuid ?? "");
+  } catch {
+    guid = raw.replace(/^"|"$/g, "");
+  }
+  if (!guid) throw new Error(`Toast dining metrics: missing reportRequestGuid (${raw.slice(0, 200)})`);
+  return guid;
+}
+
+async function fetchToastDiningMetricsReport(base: string, accessToken: string, reportGuid: string): Promise<ToastDiningMetricsRow[]> {
+  const deadline = Date.now() + 14_000;
+  let lastStatus = 0;
+  while (Date.now() < deadline) {
+    const res = await fetchWithTimeout(`${base}/era/v1/metrics/${reportGuid}`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }, 8_000);
+    lastStatus = res.status;
+    if (res.status === 200) {
+      const body = await res.json();
+      if (Array.isArray(body)) return body as ToastDiningMetricsRow[];
+      if (Array.isArray((body as any)?.data)) return (body as any).data as ToastDiningMetricsRow[];
+      return [];
+    }
+    if (res.status !== 202 && res.status !== 204) {
+      throw new Error(`Toast dining metrics get ${res.status}: ${(await res.text()).slice(0, 240)}`);
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  throw new Error(`Toast dining metrics: report not ready in time (last status ${lastStatus})`);
+}
+
+async function toastCateringRangeByDiningOption(
+  base: string,
+  accessToken: string,
+  restaurantGuid: string,
+  locationId: string,
+  startDate: string,
+  endDate: string
+): Promise<CateringDay[]> {
+  const guid = await createToastDiningMetricsReport(base, accessToken, restaurantGuid, startDate, endDate);
+  const rows = await fetchToastDiningMetricsReport(base, accessToken, guid);
+  const byDate = new Map<string, number>();
+  for (const row of rows) {
+    if (!/catering/i.test(row.diningOption ?? "")) continue;
+    const businessDate = isoFromToastBusinessDate(row.businessDate);
+    if (!businessDate) continue;
+    const amount = Number(row.netSalesAmount ?? row.grossSalesAmount ?? 0);
+    if (!Number.isFinite(amount) || amount <= 0) continue;
+    byDate.set(businessDate, (byDate.get(businessDate) ?? 0) + amount);
+  }
+  return [...byDate.entries()].map(([business_date, amount]) => ({ location_id: locationId, business_date, amount }));
+}
+
 async function toastCateringDay(base: string, accessToken: string, restaurantGuid: string, businessDate: string, cateringGuids: Set<string>): Promise<number> {
   if (cateringGuids.size === 0) return 0;
   const compact = businessDate.replace(/-/g, "");
@@ -58,7 +182,7 @@ async function toastCateringDay(base: string, accessToken: string, restaurantGui
   let totalCents = 0;
   for (;;) {
     const url = `${base}/orders/v2/ordersBulk?businessDate=${compact}&page=${page}&pageSize=100`;
-    const res = await fetch(url, {
+    const res = await fetchWithTimeout(url, {
       headers: { Authorization: `Bearer ${accessToken}`, "Toast-Restaurant-External-ID": restaurantGuid },
     });
     if (!res.ok) throw new Error(`Toast orders ${res.status}: ${(await res.text()).slice(0, 240)}`);
@@ -91,7 +215,7 @@ async function squareCateringDay(accessToken: string, locationId: string, busine
   let cursor: string | undefined;
   let totalCents = 0;
   do {
-    const res = await fetch(`${SQUARE_BASE}/v2/orders/search`, {
+    const res = await fetchWithTimeout(`${SQUARE_BASE}/v2/orders/search`, {
       method: "POST",
       headers: { "Square-Version": "2024-09-19", Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -148,7 +272,9 @@ export const getCateringSales = createServerFn({ method: "POST" })
   )
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const dates = isoRangeDates(data.start_date, data.end_date);
+    const effectiveEndDate = minISO(data.end_date, todayISO());
+    if (effectiveEndDate < data.start_date) return { results: [], errors: [] };
+    const dates = isoRangeDates(data.start_date, effectiveEndDate);
     if (dates.length > 100) throw new Error("Date range too large (max 100 days)");
 
     const { data: locs, error } = await supabaseAdmin
@@ -159,31 +285,48 @@ export const getCateringSales = createServerFn({ method: "POST" })
       .in("id", data.location_ids);
     if (error) throw new Error(error.message);
 
-    const results: CateringDay[] = [];
-    const errors: Array<{ location_id: string; message: string }> = [];
-
-    for (const loc of (locs as any[]) ?? []) {
+    const perLocation = await Promise.all(((locs as any[]) ?? []).map(async (loc) => {
+      const locResults: CateringDay[] = [];
+      const locErrors: Array<{ location_id: string; message: string }> = [];
       try {
         if (loc.pos_provider === "square" && loc.square_location_id && loc.square_access_token) {
           for (const d of dates) {
             const amt = await squareCateringDay(loc.square_access_token, loc.square_location_id, d);
-            if (amt > 0) results.push({ location_id: loc.id, business_date: d, amount: amt });
+            if (amt > 0) locResults.push({ location_id: loc.id, business_date: d, amount: amt });
           }
         } else if (loc.pos_provider === "toast" && loc.toast_restaurant_guid) {
           const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
           const creds = pickToastCreds(loc);
           if (!creds) throw new Error("Toast credentials not configured");
           const token = await toastAccessToken(base, creds.clientId, creds.clientSecret);
-          const cateringGuids = await toastCateringDiningOptionGuids(base, token, loc.toast_restaurant_guid);
-          for (const d of dates) {
-            const amt = await toastCateringDay(base, token, loc.toast_restaurant_guid, d, cateringGuids);
-            if (amt > 0) results.push({ location_id: loc.id, business_date: d, amount: amt });
+          try {
+            locResults.push(
+              ...(await toastCateringRangeByDiningOption(
+                base,
+                token,
+                loc.toast_restaurant_guid,
+                loc.id,
+                data.start_date,
+                effectiveEndDate
+              ))
+            );
+          } catch (metricsError) {
+            const cateringGuids = await toastCateringDiningOptionGuids(base, token, loc.toast_restaurant_guid);
+            for (const d of dates) {
+              const amt = await toastCateringDay(base, token, loc.toast_restaurant_guid, d, cateringGuids);
+              if (amt > 0) locResults.push({ location_id: loc.id, business_date: d, amount: amt });
+            }
+            if (locResults.length === 0) throw metricsError;
           }
         }
       } catch (e) {
-        errors.push({ location_id: loc.id, message: (e as Error).message });
+        locErrors.push({ location_id: loc.id, message: (e as Error).message });
       }
-    }
+      return { results: locResults, errors: locErrors };
+    }));
+
+    const results = perLocation.flatMap((r) => r.results);
+    const errors = perLocation.flatMap((r) => r.errors);
 
     return { results, errors };
   });
