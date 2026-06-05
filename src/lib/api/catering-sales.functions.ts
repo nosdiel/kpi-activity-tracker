@@ -42,6 +42,13 @@ function compactBusinessDate(iso: string): number {
   return Number(iso.replace(/-/g, ""));
 }
 
+function readableToastError(area: string, status: number): string {
+  if (status === 429) {
+    return "Toast is temporarily rate-limiting catering sales. Please wait 5–10 minutes, then click Refresh again.";
+  }
+  return `${area} failed with status ${status}.`;
+}
+
 function toastMetricsRange(startISO: string, endISO: string): "week" | "month" | "year" {
   const start = new Date(`${startISO}T00:00:00Z`).getTime();
   const end = new Date(`${endISO}T00:00:00Z`).getTime();
@@ -124,7 +131,7 @@ async function createToastDiningMetricsReport(
     await new Promise((r) => setTimeout(r, 1_500 * (attempt + 1)));
   }
   if (!res) throw new Error("Toast dining metrics request did not run");
-  if (!res.ok) throw new Error(`Toast dining metrics create ${range} ${res.status}: ${(await res.text()).slice(0, 240)}`);
+  if (!res.ok) throw new Error(readableToastError(`Toast dining metrics create ${range}`, res.status));
   const raw = await res.text();
   let guid = "";
   try {
@@ -152,7 +159,7 @@ async function fetchToastDiningMetricsReport(base: string, accessToken: string, 
       return [];
     }
     if (res.status !== 202 && res.status !== 204) {
-      throw new Error(`Toast dining metrics get ${res.status}: ${(await res.text()).slice(0, 240)}`);
+      throw new Error(readableToastError("Toast dining metrics get", res.status));
     }
     await new Promise((r) => setTimeout(r, 1000));
   }
