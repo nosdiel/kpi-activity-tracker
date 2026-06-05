@@ -631,6 +631,8 @@ export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
       };
     } catch (e) {
       if (!isPermissionError(e)) throw e;
+      const stdErr = (e as Error)?.message ?? String(e);
+      console.warn("[marketing-matrix] Toast Orders API blocked, falling back to Analytics:", stdErr);
       // Analytics-only fallback: units sold + revenue by menu item, no basket data.
       // Auth with the Analytics credential (separate client ID/secret).
       const ana = pickToastCreds(loc, "analytics");
@@ -648,11 +650,12 @@ export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
         item_name: data.item_name,
         analytics_only: true,
         notice:
-          "Standard/Orders API was not authorized for this Toast location. Showing units sold and item revenue from the Analytics Menu report. Co-purchase/attach-rate analysis requires the orders:read scope on the Standard API credential.",
+          `Standard/Orders API call to Toast was rejected — showing Analytics Menu report only. Toast response: ${stdErr.slice(0, 240)}`,
         current,
         prior,
       };
     }
+
   });
 
 export const listPosLocations = createServerFn({ method: "GET" })
