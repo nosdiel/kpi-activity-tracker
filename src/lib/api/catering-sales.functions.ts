@@ -563,6 +563,8 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
         location_id: z.string().uuid(),
         start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        fiscal_year: z.number().int().optional(),
+        fiscal_week: z.number().int().min(1).max(53).optional(),
       })
       .parse(input)
   )
@@ -597,6 +599,12 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
       createToastDiningMetricsReport(base, token, loc.toast_restaurant_guid!, data.start_date, data.end_date, true)
     );
     const rows = await fetchToastDiningMetricsReport(base, token, guid);
+    if (data.fiscal_year && data.fiscal_week) {
+      const reportType = diningReportType(data.start_date, data.end_date, data.fiscal_year, data.fiscal_week);
+      await writeCachedDiningRows(supabaseAdmin, loc.id, data.start_date, data.fiscal_year, data.fiscal_week, reportType, guid, rows).catch(() => undefined);
+      const days = diningRowsToCatering(rows, loc.id, data.start_date);
+      await saveWeeklyCateringActuals(supabaseAdmin, loc.id, data.fiscal_year, [{ fiscal_week: data.fiscal_week, start_date: data.start_date, end_date: data.end_date }], days);
+    }
 
     const normalized = rows.map((r) => ({
       diningOption: diningOptionLabel(r) || null,
