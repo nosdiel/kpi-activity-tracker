@@ -220,6 +220,23 @@ function QtrPage() {
     },
   });
 
+  const cateringFn = useServerFn(getCateringSales);
+  const cateringQ = useQuery({
+    queryKey: ["qtr-catering", locIdsKey, firstWeekStart, lastWeekEnd],
+    enabled: locIds.length > 0 && !!firstWeekStart && !!lastWeekEnd,
+    queryFn: async () => {
+      const res = await cateringFn({
+        data: {
+          location_ids: locIds,
+          start_date: firstWeekStart as string,
+          end_date: lastWeekEnd as string,
+        },
+      });
+      return res as { results: { location_id: string; business_date: string; amount: number }[]; errors: { location_id: string; message: string }[] };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Compute per-week values
   const rows = useMemo(() => {
     const pctByLocWeek = new Map<string, number>();
