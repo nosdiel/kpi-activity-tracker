@@ -93,8 +93,10 @@ export type Database = {
           active: boolean
           address: string | null
           created_at: string
+          food_cost_pct_of_sales: number | null
           id: string
           name: string
+          paper_goods_pct_of_sales: number | null
           payroll_pct_of_sales: number | null
           pos_provider: string | null
           region: string | null
@@ -114,8 +116,10 @@ export type Database = {
           active?: boolean
           address?: string | null
           created_at?: string
+          food_cost_pct_of_sales?: number | null
           id?: string
           name: string
+          paper_goods_pct_of_sales?: number | null
           payroll_pct_of_sales?: number | null
           pos_provider?: string | null
           region?: string | null
@@ -135,8 +139,10 @@ export type Database = {
           active?: boolean
           address?: string | null
           created_at?: string
+          food_cost_pct_of_sales?: number | null
           id?: string
           name?: string
+          paper_goods_pct_of_sales?: number | null
           payroll_pct_of_sales?: number | null
           pos_provider?: string | null
           region?: string | null
