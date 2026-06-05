@@ -167,6 +167,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
       toast_restaurant_guid: loc.toast_restaurant_guid ?? "",
       toast_client_id: loc.toast_client_id ?? "",
       toast_client_secret: "",
+      toast_analytics_client_id: loc.toast_analytics_client_id ?? "",
+      toast_analytics_client_secret: "",
     });
   };
 
