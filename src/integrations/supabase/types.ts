@@ -100,6 +100,8 @@ export type Database = {
           square_access_token: string | null
           square_location_id: string | null
           timezone: string | null
+          toast_analytics_client_id: string | null
+          toast_analytics_client_secret: string | null
           toast_api_url: string | null
           toast_client_id: string | null
           toast_client_secret: string | null
@@ -118,6 +120,8 @@ export type Database = {
           square_access_token?: string | null
           square_location_id?: string | null
           timezone?: string | null
+          toast_analytics_client_id?: string | null
+          toast_analytics_client_secret?: string | null
           toast_api_url?: string | null
           toast_client_id?: string | null
           toast_client_secret?: string | null
@@ -136,6 +140,8 @@ export type Database = {
           square_access_token?: string | null
           square_location_id?: string | null
           timezone?: string | null
+          toast_analytics_client_id?: string | null
+          toast_analytics_client_secret?: string | null
           toast_api_url?: string | null
           toast_client_id?: string | null
           toast_client_secret?: string | null
