@@ -49,9 +49,6 @@ function MarketingMatrixPage() {
 
   const [locationId, setLocationId] = useState<string>("");
   const [itemId, setItemId] = useState<string>("");
-  const [manualMode, setManualMode] = useState<boolean>(false);
-  const [manualName, setManualName] = useState<string>("");
-  const [manualPosProduct, setManualPosProduct] = useState<string>("");
   const [startDate, setStartDate] = useState<string>(isoDaysAgo(14));
   const [endDate, setEndDate] = useState<string>(isoDaysAgo(1));
 
@@ -69,33 +66,15 @@ function MarketingMatrixPage() {
     setItemId("");
   }, [locationId]);
 
-  // Auto-enable manual mode when POS won't return a menu.
-  useEffect(() => {
-    if (menuQ.data?.manual_required) setManualMode(true);
-    if (menuQ.error) setManualMode(true);
-  }, [menuQ.data, menuQ.error]);
-
   const runMut = useMutation({
     mutationFn: () => {
-      let item_id = "";
-      let item_name = "";
-      if (manualMode) {
-        const name = manualName.trim();
-        const pos = (manualPosProduct.trim() || name);
-        if (!name) throw new Error("Enter the marketed item name");
-        item_id = pos;
-        item_name = pos;
-      } else {
-        const found = menuQ.data?.items.find((i) => i.id === itemId);
-        if (!found) throw new Error("Pick an item");
-        item_id = found.id;
-        item_name = found.name;
-      }
+      const found = menuQ.data?.items.find((i) => i.id === itemId);
+      if (!found) throw new Error("Pick an item");
       return runFn({
         data: {
           location_id: locationId,
-          item_id,
-          item_name,
+          item_id: found.id,
+          item_name: found.name,
           start_date: startDate,
           end_date: endDate,
         },
