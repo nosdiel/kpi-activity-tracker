@@ -22,18 +22,16 @@ env:
       - RUNTIME
 
   - variable: SUPABASE_PUBLISHABLE_KEY
-    value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrdG9vZHNyaGFya3FicGtxb2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDgwNDQsImV4cCI6MjA5NjE4NDA0NH0.NRf4cASQRbI45mN0OzvRmnO974oznqq2ivcOCcF47Og"
+    value: "sb_publishable_kGffji6Kpudh9R6iTR3J3A_ETi2vF8a"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: VITE_SUPABASE_PUBLISHABLE_KEY
-    value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrdG9vZHNyaGFya3FicGtxb2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDgwNDQsImV4cCI6MjA5NjE4NDA0NH0.NRf4cASQRbI45mN0OzvRmnO974oznqq2ivcOCcF47Og"
+    value: "sb_publishable_kGffji6Kpudh9R6iTR3J3A_ETi2vF8a"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: SUPABASE_SERVICE_ROLE_KEY
-    value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrdG9vZHNyaGFya3FicGtxb2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDgwNDQsImV4cCI6MjA5NjE4NDA0NH0.NRf4cASQRbI45mN0OzvRmnO974oznqq2ivcOCcF47Og"
-    availability:
-      - RUNTIME
+    secret: SUPABASE_SERVICE_ROLE_KEY
