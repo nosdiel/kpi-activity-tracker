@@ -100,12 +100,16 @@ function isoRangeDates(startISO: string, endISO: string): string[] {
   return out;
 }
 
-function pickToastCreds(loc: any): { clientId: string; clientSecret: string } | null {
+function pickToastCreds(
+  loc: any,
+  opts: { analyticsOnly?: boolean } = {}
+): { clientId: string; clientSecret: string; source: "analytics" | "standard" } | null {
   const std = { clientId: loc?.toast_client_id as string | null, clientSecret: loc?.toast_client_secret as string | null };
   const ana = { clientId: loc?.toast_analytics_client_id as string | null, clientSecret: loc?.toast_analytics_client_secret as string | null };
-  const chosen = ana.clientId && ana.clientSecret ? ana : std;
-  if (!chosen.clientId || !chosen.clientSecret) return null;
-  return { clientId: chosen.clientId!, clientSecret: chosen.clientSecret! };
+  if (ana.clientId && ana.clientSecret) return { clientId: ana.clientId!, clientSecret: ana.clientSecret!, source: "analytics" };
+  if (opts.analyticsOnly) return null;
+  if (std.clientId && std.clientSecret) return { clientId: std.clientId!, clientSecret: std.clientSecret!, source: "standard" };
+  return null;
 }
 
 async function toastAccessToken(base: string, clientId: string, clientSecret: string): Promise<string> {
