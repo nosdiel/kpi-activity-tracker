@@ -72,7 +72,8 @@ function MarketingMatrixPage() {
   // Auto-enable manual mode when POS won't return a menu.
   useEffect(() => {
     if (menuQ.data?.manual_required) setManualMode(true);
-  }, [menuQ.data]);
+    if (menuQ.error) setManualMode(true);
+  }, [menuQ.data, menuQ.error]);
 
   const runMut = useMutation({
     mutationFn: () => {
