@@ -609,6 +609,17 @@ function QtrPage() {
               <pre className="text-xs bg-muted/40 p-3 rounded overflow-x-auto">
 {JSON.stringify(diagResult.requestBody, null, 2)}
               </pre>
+              <div className="rounded border bg-muted/20 p-3 text-sm">
+                <p className="font-medium">Catering net total: {money(diagResult.cateringNetTotalCents / 100)}</p>
+                <div className="mt-2 grid gap-1 sm:grid-cols-2 lg:grid-cols-4">
+                  {diagResult.cateringBreakdown.map((d) => (
+                    <div key={d.business_date} className="flex justify-between gap-3 tabular-nums">
+                      <span>{d.business_date}</span>
+                      <span>{d.amount_cents}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
               {diagResult.rows.length === 0 ? (
                 <p className="text-sm text-muted-foreground">Toast returned 0 rows for this window.</p>
               ) : (
