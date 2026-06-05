@@ -110,7 +110,7 @@ function WeeklyPnlPage() {
   const [saving, setSaving] = useState(false);
 
   // Editable state
-  const [catering, setCatering] = useState("");
+  const [outsideSales, setOutsideSales] = useState("");
   const [wages, setWages] = useState("");
   const [repairs, setRepairs] = useState("");
   const [foodLines, setFoodLines] = useState<VendorLine[]>(
