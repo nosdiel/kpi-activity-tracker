@@ -44,6 +44,8 @@ type LocStatus = {
   toast_restaurant_guid: string | null;
   toast_client_id: string | null;
   toast_secret_set: boolean;
+  toast_analytics_client_id: string | null;
+  toast_analytics_secret_set: boolean;
 };
 
 const TOAST_DEFAULT_URL = "https://ws-api.toasttab.com";
@@ -69,6 +71,8 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
     toast_restaurant_guid: "",
     toast_client_id: "",
     toast_client_secret: "",
+    toast_analytics_client_id: "",
+    toast_analytics_client_secret: "",
   });
 
   const locsQ = useQuery({
