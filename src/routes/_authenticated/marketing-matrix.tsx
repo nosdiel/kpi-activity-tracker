@@ -346,6 +346,7 @@ function MarketingMatrixPage() {
               )}
             </CardContent>
           </Card>
+          )}
         </>
       )}
     </div>
