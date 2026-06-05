@@ -172,7 +172,7 @@ function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_sales")
-        .select("business_date,actual_sales,total_cents,actual_customer_count,last_year_sales,last_year_customer_count,dessert_count")
+        .select("business_date,actual_sales,total_cents,actual_customer_count,last_year_sales,last_year_customer_count,dessert_count,focus_item_qty")
         .eq("location_id", locationId)
         .gte("business_date", dates[0])
         .lte("business_date", dates[6]);
