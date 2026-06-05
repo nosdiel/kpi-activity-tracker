@@ -125,6 +125,8 @@ function LocationsPage() {
       address: row.address ?? "",
       active: row.active ?? true,
       payroll_pct_of_sales: row.payroll_pct_of_sales == null ? "" : String(row.payroll_pct_of_sales),
+      food_cost_pct_of_sales: row.food_cost_pct_of_sales == null ? "" : String(row.food_cost_pct_of_sales),
+      paper_goods_pct_of_sales: row.paper_goods_pct_of_sales == null ? "" : String(row.paper_goods_pct_of_sales),
     });
     setOpen(true);
   };
