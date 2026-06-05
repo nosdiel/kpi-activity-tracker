@@ -392,13 +392,13 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
           {source === "square" ? (
             <div className="space-y-3">
               <div className="space-y-2">
-                <Label>Square Location ID</Label>
+                <Label>Square Location ID (optional — auto-detected from token)</Label>
                 <Input
                   value={form.square_location_id}
                   onChange={(e) =>
                     setForm((f) => ({ ...f, square_location_id: e.target.value }))
                   }
-                  placeholder="L0123ABCDEFGH"
+                  placeholder="Leave blank to auto-detect"
                 />
               </div>
               <div className="space-y-2">
