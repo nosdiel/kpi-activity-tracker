@@ -278,18 +278,6 @@ function QtrPage() {
 
   const locName = filteredLocations.find((l) => l.id === locationId)?.name ?? "—";
 
-  const renderCell = (val: { goal: number; actual: number }) => {
-    const variance = val.actual - val.goal;
-    return (
-      <>
-        <td className="px-3 py-2 text-right">{money(val.goal)}</td>
-        <td className="px-3 py-2 text-right">{money(val.actual)}</td>
-        <td className="px-3 py-2 text-right text-muted-foreground">
-          {val.goal === 0 && val.actual === 0 ? "—" : moneyVar(variance)}
-        </td>
-      </>
-    );
-  };
 
   return (
     <div className="space-y-4">
