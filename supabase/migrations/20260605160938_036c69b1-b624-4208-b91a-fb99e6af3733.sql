@@ -1,0 +1,1 @@
+GRANT ALL ON public.toast_report_jobs TO service_role; GRANT SELECT ON public.toast_report_jobs TO authenticated;

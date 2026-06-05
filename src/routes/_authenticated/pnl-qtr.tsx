@@ -379,7 +379,7 @@ function QtrPage() {
             {cateringQ.isFetching
               ? "Loading catering sales from POS…"
               : cateringErrorCount > 0
-                ? `Toast is temporarily rate-limiting live catering sales for ${cateringErrorCount} location${cateringErrorCount === 1 ? "" : "s"}. Showing saved weekly catering total ${money(savedCateringTotal)}. Please wait 5–10 minutes, then click Refresh again.`
+                ? `Toast rate limit reached, try again later. Showing saved weekly catering total ${money(savedCateringTotal)}.`
                 : `Loaded catering sales for ${cateringLoadedCount} day${cateringLoadedCount === 1 ? "" : "s"}.`}
           </AlertDescription>
         </Alert>
