@@ -146,10 +146,19 @@ function WeeklyPnlPage() {
   useEffect(() => {
     const years = withFY2027(fyQ.data ?? []);
     if (fy === null && years[0]) {
-      const latest = defaultFiscalYear(years);
-      setFy(latest.fiscal_year);
-      const cur = currentFiscalWeek(latest.start_date);
-      setWeek(cur > 1 ? cur - 1 : cur);
+      // Default to the fiscal week PRIOR to the current week (the most recent
+      // completed week), picking the FY that actually contains that prior week.
+      const priorDate = new Date();
+      priorDate.setUTCDate(priorDate.getUTCDate() - 7);
+      const priorISO = priorDate.toISOString().slice(0, 10);
+      const containing =
+        years.find((r) => {
+          const end = new Date(`${r.start_date}T00:00:00Z`);
+          end.setUTCDate(end.getUTCDate() + 7 * 52);
+          return r.start_date <= priorISO && priorISO < end.toISOString().slice(0, 10);
+        }) ?? defaultFiscalYear(years);
+      setFy(containing.fiscal_year);
+      setWeek(currentFiscalWeek(containing.start_date, priorDate));
     }
   }, [fyQ.data, fy]);
 
