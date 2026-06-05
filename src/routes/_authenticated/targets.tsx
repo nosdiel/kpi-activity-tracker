@@ -189,7 +189,7 @@ function TargetsPage() {
             <Select value={fy?.toString() ?? ""} onValueChange={(v) => setFy(Number(v))}>
               <SelectTrigger><SelectValue placeholder="FY" /></SelectTrigger>
               <SelectContent>
-                {(fyQ.data ?? []).map((y) => (
+                {fiscalYears.map((y) => (
                   <SelectItem key={y.fiscal_year} value={String(y.fiscal_year)}>FY {y.fiscal_year}</SelectItem>
                 ))}
               </SelectContent>
