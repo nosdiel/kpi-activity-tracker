@@ -235,7 +235,7 @@ function WeeklyPnlPage() {
   const cateringN = parseNum(catering);
   const wagesN = parseNum(wages);
   const repairsN = parseNum(repairs);
-  const totalSales = foodSales + cateringN;
+  const totalSales = foodSales;
   const foodCostTotal = foodLines.reduce((s, v) => s + (v.amount || 0), 0);
   const paperTotal = paperLines.reduce((s, v) => s + (v.amount || 0), 0);
   const totalCogs = wagesN + foodCostTotal + paperTotal + repairsN;
