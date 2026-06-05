@@ -399,8 +399,9 @@ const toastExtendedLocationColumns = `${toastBaseLocationColumns},toast_api_url,
 function isMissingToastMetadataColumn(error: { message?: string; code?: string; details?: string } | null | undefined) {
   if (!error) return false;
   const blob = `${error.message ?? ""} ${error.details ?? ""}`;
-  if (error.code === "42703" && (blob.includes("toast_credential_name") || blob.includes("toast_api_url"))) return true;
-  return blob.includes("toast_credential_name") || blob.includes("toast_api_url");
+  const keys = ["toast_credential_name", "toast_api_url", "toast_analytics_client_id", "toast_analytics_client_secret"];
+  if (error.code === "42703" && keys.some((k) => blob.includes(k))) return true;
+  return keys.some((k) => blob.includes(k));
 }
 
 async function selectToastLocations(supabaseAdmin: any, locationId?: string) {
@@ -424,7 +425,7 @@ async function selectToastLocations(supabaseAdmin: any, locationId?: string) {
 async function selectLocationsPosStatus(supabaseAdmin: any) {
   const baseColumns =
     "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret";
-  const extendedColumns = `${baseColumns},toast_credential_name,toast_api_url`;
+  const extendedColumns = `${baseColumns},toast_credential_name,toast_api_url,toast_analytics_client_id,toast_analytics_client_secret`;
 
   const extended = await supabaseAdmin.from("locations").select(extendedColumns).order("name");
   if (!extended.error || !isMissingToastMetadataColumn(extended.error)) return extended;
@@ -488,12 +489,15 @@ export const updateLocationPosCredentials = createServerFn({ method: "POST" })
         // Square
         square_location_id: z.string().max(64).nullable().optional(),
         square_access_token: z.string().min(10).max(512).nullable().optional(),
-        // Toast
+        // Toast — Standard/Orders API credentials
         toast_credential_name: z.string().max(128).nullable().optional(),
         toast_api_url: z.string().url().max(256).nullable().optional(),
         toast_restaurant_guid: z.string().max(64).nullable().optional(),
         toast_client_id: z.string().max(128).nullable().optional(),
         toast_client_secret: z.string().min(10).max(512).nullable().optional(),
+        // Toast — Analytics API credentials (separate client ID/secret)
+        toast_analytics_client_id: z.string().max(128).nullable().optional(),
+        toast_analytics_client_secret: z.string().min(10).max(512).nullable().optional(),
       })
       .parse(input)
   )
@@ -510,6 +514,8 @@ export const updateLocationPosCredentials = createServerFn({ method: "POST" })
     setIfPresent("toast_restaurant_guid");
     setIfPresent("toast_client_id");
     setIfPresent("toast_client_secret");
+    setIfPresent("toast_analytics_client_id");
+    setIfPresent("toast_analytics_client_secret");
 
     const { error } = await supabaseAdmin
       .from("locations")
@@ -545,6 +551,8 @@ export const getLocationsPosStatus = createServerFn({ method: "GET" })
       toast_restaurant_guid: l.toast_restaurant_guid ?? null,
       toast_client_id: l.toast_client_id ?? null,
       toast_secret_set: Boolean(l.toast_client_secret),
+      toast_analytics_client_id: l.toast_analytics_client_id ?? null,
+      toast_analytics_secret_set: Boolean(l.toast_analytics_client_secret),
     }));
   });
 
