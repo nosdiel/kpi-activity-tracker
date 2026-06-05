@@ -25,6 +25,7 @@ import { Route as AuthenticatedPnlQtrRouteImport } from './routes/_authenticated
 import { Route as AuthenticatedPnlBonusRouteImport } from './routes/_authenticated/pnl-bonus'
 import { Route as AuthenticatedPnlRouteImport } from './routes/_authenticated/pnl'
 import { Route as AuthenticatedPermissionsRouteImport } from './routes/_authenticated/permissions'
+import { Route as AuthenticatedMarketingMatrixRouteImport } from './routes/_authenticated/marketing-matrix'
 import { Route as AuthenticatedLocationsRouteImport } from './routes/_authenticated/locations'
 import { Route as AuthenticatedDessertsRouteImport } from './routes/_authenticated/desserts'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
@@ -109,6 +110,12 @@ const AuthenticatedPermissionsRoute =
     path: '/permissions',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedMarketingMatrixRoute =
+  AuthenticatedMarketingMatrixRouteImport.update({
+    id: '/marketing-matrix',
+    path: '/marketing-matrix',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedLocationsRoute = AuthenticatedLocationsRouteImport.update({
   id: '/locations',
   path: '/locations',
@@ -132,6 +139,7 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/desserts': typeof AuthenticatedDessertsRoute
   '/locations': typeof AuthenticatedLocationsRoute
+  '/marketing-matrix': typeof AuthenticatedMarketingMatrixRoute
   '/permissions': typeof AuthenticatedPermissionsRoute
   '/pnl': typeof AuthenticatedPnlRoute
   '/pnl-bonus': typeof AuthenticatedPnlBonusRoute
@@ -152,6 +160,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/desserts': typeof AuthenticatedDessertsRoute
   '/locations': typeof AuthenticatedLocationsRoute
+  '/marketing-matrix': typeof AuthenticatedMarketingMatrixRoute
   '/permissions': typeof AuthenticatedPermissionsRoute
   '/pnl': typeof AuthenticatedPnlRoute
   '/pnl-bonus': typeof AuthenticatedPnlBonusRoute
@@ -174,6 +183,7 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/desserts': typeof AuthenticatedDessertsRoute
   '/_authenticated/locations': typeof AuthenticatedLocationsRoute
+  '/_authenticated/marketing-matrix': typeof AuthenticatedMarketingMatrixRoute
   '/_authenticated/permissions': typeof AuthenticatedPermissionsRoute
   '/_authenticated/pnl': typeof AuthenticatedPnlRoute
   '/_authenticated/pnl-bonus': typeof AuthenticatedPnlBonusRoute
@@ -196,6 +206,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/desserts'
     | '/locations'
+    | '/marketing-matrix'
     | '/permissions'
     | '/pnl'
     | '/pnl-bonus'
@@ -216,6 +227,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/desserts'
     | '/locations'
+    | '/marketing-matrix'
     | '/permissions'
     | '/pnl'
     | '/pnl-bonus'
@@ -237,6 +249,7 @@ export interface FileRouteTypes {
     | '/_authenticated/dashboard'
     | '/_authenticated/desserts'
     | '/_authenticated/locations'
+    | '/_authenticated/marketing-matrix'
     | '/_authenticated/permissions'
     | '/_authenticated/pnl'
     | '/_authenticated/pnl-bonus'
@@ -372,6 +385,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPermissionsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/marketing-matrix': {
+      id: '/_authenticated/marketing-matrix'
+      path: '/marketing-matrix'
+      fullPath: '/marketing-matrix'
+      preLoaderRoute: typeof AuthenticatedMarketingMatrixRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/locations': {
       id: '/_authenticated/locations'
       path: '/locations'
@@ -400,6 +420,7 @@ interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedDessertsRoute: typeof AuthenticatedDessertsRoute
   AuthenticatedLocationsRoute: typeof AuthenticatedLocationsRoute
+  AuthenticatedMarketingMatrixRoute: typeof AuthenticatedMarketingMatrixRoute
   AuthenticatedPermissionsRoute: typeof AuthenticatedPermissionsRoute
   AuthenticatedPnlRoute: typeof AuthenticatedPnlRoute
   AuthenticatedPnlBonusRoute: typeof AuthenticatedPnlBonusRoute
@@ -417,6 +438,7 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedDessertsRoute: AuthenticatedDessertsRoute,
   AuthenticatedLocationsRoute: AuthenticatedLocationsRoute,
+  AuthenticatedMarketingMatrixRoute: AuthenticatedMarketingMatrixRoute,
   AuthenticatedPermissionsRoute: AuthenticatedPermissionsRoute,
   AuthenticatedPnlRoute: AuthenticatedPnlRoute,
   AuthenticatedPnlBonusRoute: AuthenticatedPnlBonusRoute,

@@ -189,7 +189,7 @@ function MarketingMatrixPage() {
       {runMut.isPending && (
         <Card>
           <CardContent className="py-8 text-sm text-muted-foreground">
-            Pulling orders from {runMut.variables ? "POS" : ""}… this can take a minute for large windows.
+            Pulling orders from POS… this can take a minute for large windows.
           </CardContent>
         </Card>
       )}
