@@ -110,7 +110,7 @@ function WeeklyPnlPage() {
   const [saving, setSaving] = useState(false);
 
   // Editable state
-  const [catering, setCatering] = useState("");
+  const [outsideSales, setOutsideSales] = useState("");
   const [wages, setWages] = useState("");
   const [repairs, setRepairs] = useState("");
   const [foodLines, setFoodLines] = useState<VendorLine[]>(
@@ -212,7 +212,7 @@ function WeeklyPnlPage() {
   // Hydrate local state when row arrives or selection changes
   useEffect(() => {
     const row = pnlQ.data;
-    setCatering(row?.catering != null ? String(row.catering) : "");
+    setOutsideSales("");
     setWages(row?.wages != null ? String(row.wages) : "");
     setRepairs(row?.repairs != null ? String(row.repairs) : "");
 
@@ -232,7 +232,7 @@ function WeeklyPnlPage() {
     () => (salesQ.data ?? []).reduce((s, r) => s + Number(r.actual_sales ?? 0), 0),
     [salesQ.data],
   );
-  const cateringN = parseNum(catering);
+  const outsideSalesN = parseNum(outsideSales);
   const wagesN = parseNum(wages);
   const repairsN = parseNum(repairs);
   const totalSales = foodSales;
@@ -300,7 +300,6 @@ function WeeklyPnlPage() {
           location_id: locationId,
           fiscal_year: fy,
           fiscal_week: week,
-          catering: cateringN,
           wages: wagesN,
           repairs: repairsN,
           vendor_amounts,
@@ -408,9 +407,9 @@ function WeeklyPnlPage() {
             <ReadonlyAmount value={foodSales} />
             <PctCell>—</PctCell>
           </Row>
-          <Row label="Catering" i={1}>
-            <AmountInput value={catering} onChange={setCatering} />
-            <PctCell>{pctFmt(pctOf(cateringN))}</PctCell>
+          <Row label="Outside Sales" i={1}>
+            <AmountInput value={outsideSales} onChange={setOutsideSales} />
+            <PctCell>{pctFmt(pctOf(outsideSalesN))}</PctCell>
           </Row>
 
           <TotalRow label="Total Sales" value={money(totalSales)} />
