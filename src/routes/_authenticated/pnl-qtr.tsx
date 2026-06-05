@@ -105,10 +105,7 @@ function QtrPage() {
   );
 
   useEffect(() => {
-    if (!locationId && filteredLocations[0]) setLocationId(filteredLocations[0].id);
-    if (locationId && !filteredLocations.some((l) => l.id === locationId) && filteredLocations[0]) {
-      setLocationId(filteredLocations[0].id);
-    }
+    if (!locationId && filteredLocations[0]) setLocationId("all");
   }, [filteredLocations, locationId]);
 
   const fiscalYears = useMemo(() => withFY2027(fyQ.data ?? []), [fyQ.data]);
