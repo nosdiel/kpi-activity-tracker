@@ -18,10 +18,8 @@ const ROLE_PCT: Record<Role, number> = {
   assistant_manager: 0.075,
 };
 
-// Quarter hours (40 hrs/week * 13 weeks)
-const QUARTER_HOURS = 40 * 13;
+const QUARTER_HOURS = 40 * 13; // 40hr/wk * 13wk
 
-// Payout table: sales-target % -> payout %
 const PAYOUT_TABLE: Array<{ threshold: number; payout: number; label: string }> = [
   { threshold: 0, payout: 0, label: "< 95%" },
   { threshold: 95, payout: 0, label: "95%" },
@@ -52,19 +50,23 @@ const money = (n: number) =>
   n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function BonusPage() {
-  const [hourlyRate, setHourlyRate] = useState("");
   const [role, setRole] = useState<Role>("store_manager");
+  const [annualSalary, setAnnualSalary] = useState("");
+  const [hourlyRate, setHourlyRate] = useState("");
   const [quarterTarget, setQuarterTarget] = useState("");
   const [actualSales, setActualSales] = useState("");
   const [payrollMet, setPayrollMet] = useState(true);
   const [foodMet, setFoodMet] = useState(true);
 
   const calc = useMemo(() => {
-    const rate = parseNum(hourlyRate);
+    const quarterlyEarning =
+      role === "store_manager"
+        ? parseNum(annualSalary) / 4
+        : parseNum(hourlyRate) * QUARTER_HOURS;
+
     const target = parseNum(quarterTarget);
     const actual = parseNum(actualSales);
 
-    const quarterlyEarning = rate * QUARTER_HOURS;
     const baseBonus = quarterlyEarning * ROLE_PCT[role];
     const salesTargetPct = target > 0 ? (actual / target) * 100 : 0;
     const payoutPct = payoutPctFor(salesTargetPct);
@@ -72,7 +74,7 @@ function BonusPage() {
     if (!payrollMet || !foodMet) bonus = bonus * 0.4;
 
     return { quarterlyEarning, baseBonus, salesTargetPct, payoutPct, bonus };
-  }, [hourlyRate, role, quarterTarget, actualSales, payrollMet, foodMet]);
+  }, [role, annualSalary, hourlyRate, quarterTarget, actualSales, payrollMet, foodMet]);
 
   return (
     <div className="space-y-6">
@@ -80,25 +82,14 @@ function BonusPage() {
         <p className="text-sm uppercase tracking-[0.2em] text-muted-foreground">NiNi - KPI</p>
         <h1 className="text-3xl font-bold tracking-tight text-foreground">Bonus Calculator</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Store manager bonus: 15% of QTR earning (hourly rate × {QUARTER_HOURS} hrs) at 100% sales target, scaled by
-          payout table. Assistant manager: 7.5%. If payroll or food cost targets are missed, bonus is reduced to 40%.
+          Store Manager: 15% of quarterly salary (annual ÷ 4) at 100% sales target, scaled by payout table.
+          Assistant Manager: 7.5% of quarterly earning (hourly × {QUARTER_HOURS} hrs). If payroll or food cost targets
+          are missed, bonus is reduced to 40%.
         </p>
       </div>
 
       <Card>
         <CardContent className="pt-6 grid gap-4 md:grid-cols-2">
-          <div className="space-y-2">
-            <Label>Hourly Rate</Label>
-            <Input
-              inputMode="decimal"
-              placeholder="0.00"
-              value={hourlyRate}
-              onChange={(e) => setHourlyRate(e.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Quarterly earning: {money(calc.quarterlyEarning)} ({QUARTER_HOURS} hrs)
-            </p>
-          </div>
           <div className="space-y-2">
             <Label>Role</Label>
             <Select value={role} onValueChange={(v) => setRole(v as Role)}>
@@ -106,11 +97,40 @@ function BonusPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="store_manager">Store Manager (15%)</SelectItem>
-                <SelectItem value="assistant_manager">Assistant Manager (7.5%)</SelectItem>
+                <SelectItem value="store_manager">Store Manager</SelectItem>
+                <SelectItem value="assistant_manager">Assistant Manager</SelectItem>
               </SelectContent>
             </Select>
           </div>
+
+          {role === "store_manager" ? (
+            <div className="space-y-2">
+              <Label>Annual Salary</Label>
+              <Input
+                inputMode="decimal"
+                placeholder="0.00"
+                value={annualSalary}
+                onChange={(e) => setAnnualSalary(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Quarterly salary: {money(calc.quarterlyEarning)}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <Label>Hourly Rate</Label>
+              <Input
+                inputMode="decimal"
+                placeholder="0.00"
+                value={hourlyRate}
+                onChange={(e) => setHourlyRate(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Quarterly earning: {money(calc.quarterlyEarning)} ({QUARTER_HOURS} hrs)
+              </p>
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label>Quarter Sales Target</Label>
             <Input
@@ -146,7 +166,7 @@ function BonusPage() {
         <CardContent className="pt-6 space-y-3">
           <Row label="Sales Target %" value={`${calc.salesTargetPct.toFixed(1)}%`} />
           <Row label="Payout % of Target" value={`${calc.payoutPct}%`} />
-          <Row label={`Base bonus (at 100%, ${role === "store_manager" ? "15%" : "7.5%"} of QTR earning)`} value={money(calc.baseBonus)} />
+          <Row label="Base bonus (at 100%)" value={money(calc.baseBonus)} />
           {(!payrollMet || !foodMet) && (
             <p className="text-xs text-muted-foreground">Targets missed — bonus reduced to 40%.</p>
           )}
