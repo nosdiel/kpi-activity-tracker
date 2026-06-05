@@ -137,30 +137,41 @@ function QtrPage() {
     [qRange.start, qRange.end],
   );
 
+  const locIds = useMemo(
+    () =>
+      locationId === "all"
+        ? filteredLocations.map((l) => l.id)
+        : locationId
+          ? [locationId]
+          : [],
+    [locationId, filteredLocations],
+  );
+  const locIdsKey = locIds.join(",");
+
   const targetsQ = useQuery({
-    queryKey: ["qtr-targets", locationId, fy, quarter],
-    enabled: !!locationId && !!fy,
+    queryKey: ["qtr-targets", locIdsKey, fy, quarter],
+    enabled: locIds.length > 0 && !!fy,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("weekly_targets")
-        .select("fiscal_week,sales_target")
-        .eq("location_id", locationId)
+        .select("location_id,fiscal_week,target_pct_over_ly")
+        .in("location_id", locIds)
         .eq("fiscal_year", fy as number)
         .gte("fiscal_week", qRange.start)
         .lte("fiscal_week", qRange.end);
       if (error) throw error;
-      return (data ?? []) as { fiscal_week: number; sales_target: number | null }[];
+      return (data ?? []) as { location_id: string; fiscal_week: number; target_pct_over_ly: number | null }[];
     },
   });
 
   const pnlQ = useQuery({
-    queryKey: ["qtr-pnl", locationId, fy, quarter],
-    enabled: !!locationId && !!fy,
+    queryKey: ["qtr-pnl", locIdsKey, fy, quarter],
+    enabled: locIds.length > 0 && !!fy,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("weekly_pnl")
         .select("fiscal_week,catering,wages,vendor_amounts")
-        .eq("location_id", locationId)
+        .in("location_id", locIds)
         .eq("fiscal_year", fy as number)
         .gte("fiscal_week", qRange.start)
         .lte("fiscal_week", qRange.end);
@@ -188,17 +199,22 @@ function QtrPage() {
   const lastWeekEnd = weekDateRanges.get(weeks[weeks.length - 1])?.[1];
 
   const salesQ = useQuery({
-    queryKey: ["qtr-sales", locationId, firstWeekStart, lastWeekEnd],
-    enabled: !!locationId && !!firstWeekStart && !!lastWeekEnd,
+    queryKey: ["qtr-sales", locIdsKey, firstWeekStart, lastWeekEnd],
+    enabled: locIds.length > 0 && !!firstWeekStart && !!lastWeekEnd,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_sales")
-        .select("business_date,actual_sales")
-        .eq("location_id", locationId)
+        .select("location_id,business_date,actual_sales,last_year_sales")
+        .in("location_id", locIds)
         .gte("business_date", firstWeekStart as string)
         .lte("business_date", lastWeekEnd as string);
       if (error) throw error;
-      return (data ?? []) as { business_date: string; actual_sales: number | null }[];
+      return (data ?? []) as {
+        location_id: string;
+        business_date: string;
+        actual_sales: number | null;
+        last_year_sales: number | null;
+      }[];
     },
   });
 
