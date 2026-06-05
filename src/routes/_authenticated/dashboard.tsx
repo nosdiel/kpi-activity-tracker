@@ -38,6 +38,7 @@ type DailySale = {
   last_year_sales: number | null;
   last_year_customer_count: number | null;
   dessert_count: number | null;
+  focus_item_qty: number | null;
 };
 type Target = {
   fiscal_year: number;
