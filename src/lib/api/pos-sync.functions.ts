@@ -1356,7 +1356,7 @@ export const getTrackableItemDailyQuantity = createServerFn({ method: "POST" })
 
     // Load location credentials.
     const baseColumns =
-      "id,pos_provider,toast_restaurant_guid,toast_client_id,toast_client_secret";
+      "id,pos_provider,toast_restaurant_guid,toast_client_id,toast_client_secret,toast_analytics_client_id,toast_analytics_client_secret";
     const extendedColumns = `${baseColumns},toast_api_url`;
     let locRes = await supabaseAdmin.from("locations").select(extendedColumns).eq("id", data.location_id).maybeSingle();
     if (locRes.error && isMissingToastMetadataColumn(locRes.error)) {
@@ -1364,7 +1364,9 @@ export const getTrackableItemDailyQuantity = createServerFn({ method: "POST" })
     }
     if (locRes.error) return { byDate: {} as Record<string, number>, items: [] as { id: string; name: string }[], error: locRes.error.message };
     const loc = locRes.data as any;
-    if (!loc?.toast_client_id || !loc?.toast_client_secret || !loc?.toast_restaurant_guid) {
+    const hasStd = !!(loc?.toast_client_id && loc?.toast_client_secret);
+    const hasAna = !!(loc?.toast_analytics_client_id && loc?.toast_analytics_client_secret);
+    if ((!hasStd && !hasAna) || !loc?.toast_restaurant_guid) {
       return { byDate: {} as Record<string, number>, items: active.map((it: any) => ({ id: it.id, name: it.name })), error: "Toast credentials missing for this location" };
     }
 
