@@ -49,6 +49,9 @@ function MarketingMatrixPage() {
 
   const [locationId, setLocationId] = useState<string>("");
   const [itemId, setItemId] = useState<string>("");
+  const [manualMode, setManualMode] = useState<boolean>(false);
+  const [manualName, setManualName] = useState<string>("");
+  const [manualPosProduct, setManualPosProduct] = useState<string>("");
   const [startDate, setStartDate] = useState<string>(isoDaysAgo(14));
   const [endDate, setEndDate] = useState<string>(isoDaysAgo(1));
 
@@ -66,15 +69,32 @@ function MarketingMatrixPage() {
     setItemId("");
   }, [locationId]);
 
+  // Auto-enable manual mode when POS won't return a menu.
+  useEffect(() => {
+    if (menuQ.data?.manual_required) setManualMode(true);
+  }, [menuQ.data]);
+
   const runMut = useMutation({
     mutationFn: () => {
-      const item = menuQ.data?.items.find((i) => i.id === itemId);
-      if (!item) throw new Error("Pick an item");
+      let item_id = "";
+      let item_name = "";
+      if (manualMode) {
+        const name = manualName.trim();
+        const pos = (manualPosProduct.trim() || name);
+        if (!name) throw new Error("Enter the marketed item name");
+        item_id = pos;
+        item_name = pos;
+      } else {
+        const found = menuQ.data?.items.find((i) => i.id === itemId);
+        if (!found) throw new Error("Pick an item");
+        item_id = found.id;
+        item_name = found.name;
+      }
       return runFn({
         data: {
           location_id: locationId,
-          item_id: item.id,
-          item_name: item.name,
+          item_id,
+          item_name,
           start_date: startDate,
           end_date: endDate,
         },
@@ -133,32 +153,59 @@ function MarketingMatrixPage() {
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Marketed item</Label>
-            <Select value={itemId} onValueChange={setItemId} disabled={!menuQ.data}>
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    !locationId
-                      ? "Select location first"
-                      : menuQ.isLoading
-                      ? "Loading menu…"
-                      : menuQ.error
-                      ? "Menu error"
-                      : "Select item"
-                  }
+          <div className="space-y-1.5 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <Label>Marketed item</Label>
+              <button
+                type="button"
+                onClick={() => setManualMode((m) => !m)}
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+              >
+                {manualMode ? "Pick from POS menu" : "Enter manually"}
+              </button>
+            </div>
+
+            {manualMode ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="Name (e.g. Guava Pastry)"
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
                 />
-              </SelectTrigger>
-              <SelectContent className="max-h-[320px]">
-                {(menuQ.data?.items ?? []).map((i) => (
-                  <SelectItem key={i.id} value={i.id}>
-                    {i.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {menuQ.error && (
-              <p className="text-xs text-destructive">{(menuQ.error as Error).message}</p>
+                <Input
+                  placeholder="POS Product (matches line item name)"
+                  value={manualPosProduct}
+                  onChange={(e) => setManualPosProduct(e.target.value)}
+                />
+              </div>
+            ) : (
+              <Select value={itemId} onValueChange={setItemId} disabled={!menuQ.data || menuQ.data.items.length === 0}>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      !locationId
+                        ? "Select location first"
+                        : menuQ.isLoading
+                        ? "Loading menu…"
+                        : (menuQ.data?.items.length ?? 0) === 0
+                        ? "Menu unavailable — use manual entry"
+                        : "Select item"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent className="max-h-[320px]">
+                  {(menuQ.data?.items ?? []).map((i) => (
+                    <SelectItem key={i.id} value={i.id}>
+                      {i.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {menuQ.data?.manual_required && !manualMode && (
+              <p className="text-xs text-amber-600">
+                POS menu access isn't available for this location — switch to manual entry.
+              </p>
             )}
           </div>
 
@@ -178,13 +225,25 @@ function MarketingMatrixPage() {
             </p>
             <Button
               onClick={() => runMut.mutate()}
-              disabled={!locationId || !itemId || runMut.isPending}
+              disabled={
+                !locationId ||
+                (manualMode ? !manualName.trim() : !itemId) ||
+                runMut.isPending
+              }
             >
               {runMut.isPending ? "Analyzing…" : "Run analysis"}
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {result?.analytics_only && result.notice && (
+        <Card>
+          <CardContent className="py-4 text-sm text-amber-700 dark:text-amber-300">
+            {result.notice}
+          </CardContent>
+        </Card>
+      )}
 
       {runMut.isPending && (
         <Card>
@@ -204,26 +263,30 @@ function MarketingMatrixPage() {
               delta={result.current.units_sold - result.prior.units_sold}
             />
             <MetricCard
-              label="Attach rate"
-              value={fmtPct(result.current.attach_rate)}
-              prior={`vs ${fmtPct(result.prior.attach_rate)} LY`}
-              delta={result.current.attach_rate - result.prior.attach_rate}
-              suffix="pp"
-            />
-            <MetricCard
-              label="Avg check w/ item"
-              value={fmtMoney(result.current.avg_check_with)}
-              prior={`w/o: ${fmtMoney(result.current.avg_check_without)}`}
-              delta={result.current.avg_check_with - result.current.avg_check_without}
-              money
-            />
-            <MetricCard
-              label="Add-on revenue"
+              label={result.analytics_only ? "Item revenue" : "Add-on revenue"}
               value={fmtMoney(result.current.addon_revenue)}
               prior={`vs ${fmtMoney(result.prior.addon_revenue)} LY`}
               delta={result.current.addon_revenue - result.prior.addon_revenue}
               money
             />
+            {!result.analytics_only && (
+              <>
+                <MetricCard
+                  label="Attach rate"
+                  value={fmtPct(result.current.attach_rate)}
+                  prior={`vs ${fmtPct(result.prior.attach_rate)} LY`}
+                  delta={result.current.attach_rate - result.prior.attach_rate}
+                  suffix="pp"
+                />
+                <MetricCard
+                  label="Avg check w/ item"
+                  value={fmtMoney(result.current.avg_check_with)}
+                  prior={`w/o: ${fmtMoney(result.current.avg_check_without)}`}
+                  delta={result.current.avg_check_with - result.current.avg_check_without}
+                  money
+                />
+              </>
+            )}
           </div>
 
           <Card>
@@ -248,6 +311,7 @@ function MarketingMatrixPage() {
             </CardContent>
           </Card>
 
+          {!result.analytics_only && (
           <Card>
             <CardHeader>
               <CardTitle>Top co-purchased items</CardTitle>
@@ -282,6 +346,7 @@ function MarketingMatrixPage() {
               )}
             </CardContent>
           </Card>
+          )}
         </>
       )}
     </div>

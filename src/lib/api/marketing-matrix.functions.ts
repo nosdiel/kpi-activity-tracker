@@ -174,12 +174,8 @@ async function toastMenu(base: string, token: string, guid: string): Promise<Men
     }
     if (seen.size > 500) break;
   }
-  if (seen.size === 0) {
-    throw new Error(
-      "Toast credentials lack menus/config access and no recent orders were found. Grant 'menus.read' or 'config:read' scope to the Toast API client."
-    );
-  }
-  return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  // No source available — caller will enable manual entry.
+  return [];
 }
 
 export const getPosMenu = createServerFn({ method: "POST" })
@@ -189,13 +185,17 @@ export const getPosMenu = createServerFn({ method: "POST" })
     const loc = await loadLocation(data.location_id);
     const provider = inferProvider(loc);
     if (provider === "square") {
-      const items = await squareMenu(loc.square_access_token);
-      return { provider, items };
+      try {
+        const items = await squareMenu(loc.square_access_token);
+        return { provider, items, manual_required: items.length === 0 };
+      } catch {
+        return { provider, items: [] as MenuItem[], manual_required: true };
+      }
     }
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
     const tok = await toastAuth(base, loc.toast_client_id, loc.toast_client_secret);
     const items = await toastMenu(base, tok, loc.toast_restaurant_guid);
-    return { provider, items };
+    return { provider, items, manual_required: items.length === 0 };
   });
 
 // ---------------- Order fetching ----------------
@@ -427,6 +427,116 @@ function shiftISO(iso: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function isPermissionError(e: unknown): boolean {
+  const m = (e as Error)?.message ?? "";
+  return /\b40[13]\b/.test(m) || /not permitted/i.test(m) || /forbidden/i.test(m);
+}
+
+// ---------- Toast Analytics menu reporting (fallback when orders blocked) ----------
+async function toastAnalyticsItemRows(
+  base: string,
+  token: string,
+  guid: string,
+  startISO: string,
+  endISO: string
+): Promise<Array<Record<string, any>>> {
+  const startCompact = Number(startISO.replace(/-/g, ""));
+  const endCompact = Number(endISO.replace(/-/g, ""));
+  const groupByAttempts = [["MENU_ITEMS", "DAY"], ["MENU_ITEM", "DAY"], ["MENU_ITEMS"]];
+
+  for (const groupBy of groupByAttempts) {
+    try {
+      const createRes = await fetchWithTimeout(`${base}/era/v1/metrics/week`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "Toast-Restaurant-External-ID": guid },
+        body: JSON.stringify({
+          startBusinessDate: startCompact,
+          endBusinessDate: endCompact,
+          restaurantIds: [guid],
+          excludedRestaurantIds: [],
+          groupBy,
+        }),
+      }, 15_000);
+      if (!createRes.ok) continue;
+      const createdRaw = await createRes.text();
+      let reportRequestGuid = "";
+      try {
+        const parsed = JSON.parse(createdRaw);
+        reportRequestGuid = typeof parsed === "string" ? parsed : parsed?.reportRequestGuid ?? "";
+      } catch {
+        reportRequestGuid = createdRaw.replace(/^"|"$/g, "");
+      }
+      if (!reportRequestGuid) continue;
+
+      const deadline = Date.now() + 60_000;
+      while (Date.now() < deadline) {
+        const getRes = await fetchWithTimeout(`${base}/era/v1/metrics/${reportRequestGuid}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        }, 15_000);
+        if (getRes.status === 200) {
+          const body = await getRes.json();
+          if (Array.isArray(body)) return body as Array<Record<string, any>>;
+          break;
+        }
+        if (getRes.status !== 202 && getRes.status !== 204) break;
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    } catch {
+      // try next groupBy
+    }
+  }
+  return [];
+}
+
+function emptyWindow(startISO: string, endISO: string): WindowResult {
+  const daily: Array<{ date: string; units: number }> = [];
+  for (let d = new Date(`${startISO}T00:00:00Z`); d <= new Date(`${endISO}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)) {
+    daily.push({ date: d.toISOString().slice(0, 10), units: 0 });
+  }
+  return {
+    start_date: startISO,
+    end_date: endISO,
+    check_count: 0,
+    checks_with_item: 0,
+    units_sold: 0,
+    attach_rate: 0,
+    avg_check_with: 0,
+    avg_check_without: 0,
+    addon_revenue: 0,
+    daily,
+    co_items: [],
+  };
+}
+
+function analyzeAnalyticsRows(
+  rows: Array<Record<string, any>>,
+  itemName: string,
+  startISO: string,
+  endISO: string
+): WindowResult {
+  const match = itemName.trim().toLowerCase();
+  const w = emptyWindow(startISO, endISO);
+  const dayIdx = new Map(w.daily.map((d, i) => [d.date, i]));
+
+  for (const row of rows) {
+    const name = String(
+      row.menuItemName ?? row.menuItem ?? row.itemName ?? row.name ?? ""
+    ).toLowerCase();
+    if (!name || !name.includes(match)) continue;
+    const qty = Number(row.itemQuantity ?? row.quantity ?? row.unitsSold ?? row.count ?? 0) || 0;
+    const rev = Number(row.netSalesAmount ?? row.grossSalesAmount ?? row.sales ?? 0) || 0;
+    w.units_sold += qty;
+    w.addon_revenue += rev; // reused field to surface item revenue in analytics-only mode
+    const rawDate = String(row.businessDate ?? row.date ?? "");
+    const iso = /^\d{8}$/.test(rawDate)
+      ? `${rawDate.slice(0, 4)}-${rawDate.slice(4, 6)}-${rawDate.slice(6, 8)}`
+      : rawDate.slice(0, 10);
+    const idx = dayIdx.get(iso);
+    if (idx !== undefined) w.daily[idx].units += qty;
+  }
+  return w;
+}
+
 export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input) =>
@@ -452,34 +562,61 @@ export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
     const loc = await loadLocation(data.location_id);
     const provider = inferProvider(loc);
 
-    // Comparison window = same window 364 days earlier (week-aligned).
     const prevStart = shiftISO(data.start_date, -364);
     const prevEnd = shiftISO(data.end_date, -364);
 
-    let currentChecks: CheckRow[] = [];
-    let priorChecks: CheckRow[] = [];
-
     if (provider === "square") {
-      currentChecks = await fetchSquareChecks(loc.square_access_token, loc.square_location_id, data.start_date, data.end_date);
-      priorChecks = await fetchSquareChecks(loc.square_access_token, loc.square_location_id, prevStart, prevEnd);
-    } else {
-      const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
-      const tok = await toastAuth(base, loc.toast_client_id, loc.toast_client_secret);
-      currentChecks = await fetchToastChecks(base, tok, loc.toast_restaurant_guid, data.start_date, data.end_date);
-      priorChecks = await fetchToastChecks(base, tok, loc.toast_restaurant_guid, prevStart, prevEnd);
+      const currentChecks = await fetchSquareChecks(loc.square_access_token, loc.square_location_id, data.start_date, data.end_date);
+      const priorChecks = await fetchSquareChecks(loc.square_access_token, loc.square_location_id, prevStart, prevEnd);
+      return {
+        provider,
+        location_name: loc.name,
+        item_id: data.item_id,
+        item_name: data.item_name,
+        analytics_only: false,
+        notice: null as string | null,
+        current: analyze(currentChecks, data.item_id, data.item_name, data.start_date, data.end_date),
+        prior: analyze(priorChecks, data.item_id, data.item_name, prevStart, prevEnd),
+      };
     }
 
-    const current = analyze(currentChecks, data.item_id, data.item_name, data.start_date, data.end_date);
-    const prior = analyze(priorChecks, data.item_id, data.item_name, prevStart, prevEnd);
-
-    return {
-      provider,
-      location_name: loc.name,
-      item_id: data.item_id,
-      item_name: data.item_name,
-      current,
-      prior,
-    };
+    // Toast
+    const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
+    const tok = await toastAuth(base, loc.toast_client_id, loc.toast_client_secret);
+    try {
+      const currentChecks = await fetchToastChecks(base, tok, loc.toast_restaurant_guid, data.start_date, data.end_date);
+      const priorChecks = await fetchToastChecks(base, tok, loc.toast_restaurant_guid, prevStart, prevEnd);
+      return {
+        provider,
+        location_name: loc.name,
+        item_id: data.item_id,
+        item_name: data.item_name,
+        analytics_only: false,
+        notice: null as string | null,
+        current: analyze(currentChecks, data.item_id, data.item_name, data.start_date, data.end_date),
+        prior: analyze(priorChecks, data.item_id, data.item_name, prevStart, prevEnd),
+      };
+    } catch (e) {
+      if (!isPermissionError(e)) throw e;
+      // Analytics-only fallback: units sold + revenue by menu item, no basket data.
+      const [curRows, priorRows] = await Promise.all([
+        toastAnalyticsItemRows(base, tok, loc.toast_restaurant_guid, data.start_date, data.end_date),
+        toastAnalyticsItemRows(base, tok, loc.toast_restaurant_guid, prevStart, prevEnd),
+      ]);
+      const current = analyzeAnalyticsRows(curRows, data.item_name, data.start_date, data.end_date);
+      const prior = analyzeAnalyticsRows(priorRows, data.item_name, prevStart, prevEnd);
+      return {
+        provider,
+        location_name: loc.name,
+        item_id: data.item_id,
+        item_name: data.item_name,
+        analytics_only: true,
+        notice:
+          "Toast credentials only have Analytics access. Showing units sold and item revenue from the Analytics Menu report. Co-purchase/attach-rate analysis requires the orders:read scope.",
+        current,
+        prior,
+      };
+    }
   });
 
 export const listPosLocations = createServerFn({ method: "GET" })
