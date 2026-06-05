@@ -29,6 +29,7 @@ type LocationRow = {
   timezone: string | null;
   address: string | null;
   active: boolean | null;
+  payroll_pct_of_sales: number | null;
 };
 
 type FormState = {
@@ -38,6 +39,7 @@ type FormState = {
   timezone: string;
   address: string;
   active: boolean;
+  payroll_pct_of_sales: string;
 };
 
 const emptyForm: FormState = {
@@ -46,6 +48,7 @@ const emptyForm: FormState = {
   timezone: "America/New_York",
   address: "",
   active: true,
+  payroll_pct_of_sales: "",
 };
 
 function LocationsPage() {
