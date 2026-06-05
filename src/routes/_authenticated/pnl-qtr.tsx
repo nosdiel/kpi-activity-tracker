@@ -220,23 +220,31 @@ function QtrPage() {
 
   // Compute per-week values
   const rows = useMemo(() => {
-    const targetByWeek = new Map<number, number>();
-    (targetsQ.data ?? []).forEach((r) => targetByWeek.set(r.fiscal_week, Number(r.sales_target ?? 0)));
-    const pnlByWeek = new Map<number, { catering: number; wages: number; food: number; paper: number }>();
-    (pnlQ.data ?? []).forEach((r) =>
-      pnlByWeek.set(r.fiscal_week, {
-        catering: Number(r.catering ?? 0),
-        wages: Number(r.wages ?? 0),
-        food: sumVendor(r.vendor_amounts, "food_cost"),
-        paper: sumVendor(r.vendor_amounts, "paper_supplies"),
-      }),
+    // target pct per (location, week)
+    const pctByLocWeek = new Map<string, number>();
+    (targetsQ.data ?? []).forEach((r) =>
+      pctByLocWeek.set(`${r.location_id}:${r.fiscal_week}`, Number(r.target_pct_over_ly ?? 0) / 100),
     );
+
+    const pnlByWeek = new Map<number, { catering: number; wages: number; food: number; paper: number }>();
+    (pnlQ.data ?? []).forEach((r) => {
+      const cur = pnlByWeek.get(r.fiscal_week) ?? { catering: 0, wages: 0, food: 0, paper: 0 };
+      cur.catering += Number(r.catering ?? 0);
+      cur.wages += Number(r.wages ?? 0);
+      cur.food += sumVendor(r.vendor_amounts, "food_cost");
+      cur.paper += sumVendor(r.vendor_amounts, "paper_supplies");
+      pnlByWeek.set(r.fiscal_week, cur);
+    });
+
     const salesByWeek = new Map<number, number>();
+    const goalByWeek = new Map<number, number>();
     (salesQ.data ?? []).forEach((s) => {
-      // assign sale to its fiscal week by date lookup
       for (const [w, [start, end]] of weekDateRanges.entries()) {
         if (s.business_date >= start && s.business_date <= end) {
           salesByWeek.set(w, (salesByWeek.get(w) ?? 0) + Number(s.actual_sales ?? 0));
+          const pct = pctByLocWeek.get(`${s.location_id}:${w}`) ?? 0;
+          const ly = Number(s.last_year_sales ?? 0);
+          goalByWeek.set(w, (goalByWeek.get(w) ?? 0) + ly * (1 + pct));
           break;
         }
       }
@@ -245,7 +253,7 @@ function QtrPage() {
     return weeks.map((w) => {
       const sales = salesByWeek.get(w) ?? 0;
       const p = pnlByWeek.get(w) ?? { catering: 0, wages: 0, food: 0, paper: 0 };
-      const salesGoal = targetByWeek.get(w) ?? 0;
+      const salesGoal = goalByWeek.get(w) ?? 0;
       const vals: Record<CatKey, { goal: number; actual: number }> = {
         sales: { goal: salesGoal, actual: sales },
         payroll: { goal: 0, actual: p.wages },
