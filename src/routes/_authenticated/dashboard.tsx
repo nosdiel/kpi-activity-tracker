@@ -465,7 +465,7 @@ function DashboardPage() {
                   <Td right>{money(r.lyAvg)}</Td>
                   <Td right>{r.hasActual ? money(r.actAvg) : "—"}</Td>
                   <Td right>{num(r.lyCust)}</Td>
-                  <Td right>{r.hasActual ? num(r.cust) : "0"}</Td>
+                  <Td right>{r.hasActual ? num(r.cust) : "—"}</Td>
                   <Td right className={r.hasActual ? varClass(r.varCust) : "text-muted-foreground"}>
                     {r.hasActual ? num(r.varCust) : "—"}
                   </Td>
