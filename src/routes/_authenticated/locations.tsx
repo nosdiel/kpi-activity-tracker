@@ -30,6 +30,8 @@ type LocationRow = {
   address: string | null;
   active: boolean | null;
   payroll_pct_of_sales: number | null;
+  food_cost_pct_of_sales: number | null;
+  paper_goods_pct_of_sales: number | null;
 };
 
 type FormState = {
@@ -40,6 +42,8 @@ type FormState = {
   address: string;
   active: boolean;
   payroll_pct_of_sales: string;
+  food_cost_pct_of_sales: string;
+  paper_goods_pct_of_sales: string;
 };
 
 const emptyForm: FormState = {
@@ -49,6 +53,8 @@ const emptyForm: FormState = {
   address: "",
   active: true,
   payroll_pct_of_sales: "",
+  food_cost_pct_of_sales: "",
+  paper_goods_pct_of_sales: "",
 };
 
 function LocationsPage() {
