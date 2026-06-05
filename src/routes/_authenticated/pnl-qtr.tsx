@@ -399,13 +399,13 @@ function QtrPage() {
                   const v = totals[c.key];
                   const variance = v.actual - v.goal;
                   return (
-                    <>
-                      <td key={`${c.key}-tg`} className="px-3 py-3 text-right border-l border-white/20">{money(v.goal)}</td>
-                      <td key={`${c.key}-ta`} className="px-3 py-3 text-right">{money(v.actual)}</td>
-                      <td key={`${c.key}-tw`} className="px-3 py-3 text-right">
+                    <Fragment key={c.key}>
+                      <td className="px-3 py-3 text-right border-l border-white/20">{money(v.goal)}</td>
+                      <td className="px-3 py-3 text-right">{money(v.actual)}</td>
+                      <td className="px-3 py-3 text-right">
                         {v.goal === 0 && v.actual === 0 ? "—" : moneyVar(variance)}
                       </td>
-                    </>
+                    </Fragment>
                   );
                 })}
               </tr>
