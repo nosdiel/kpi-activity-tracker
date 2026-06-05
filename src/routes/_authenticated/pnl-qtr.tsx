@@ -362,11 +362,11 @@ function QtrPage() {
                 <th className="px-3 py-2"></th>
                 <th className="px-3 py-2 text-left font-medium">Weeks</th>
                 {CATEGORIES.map((c) => (
-                  <>
-                    <th key={`${c.key}-g`} className="px-3 py-2 text-right font-medium border-l">Goal</th>
-                    <th key={`${c.key}-a`} className="px-3 py-2 text-right font-medium">Actual</th>
-                    <th key={`${c.key}-w`} className="px-3 py-2 text-right font-medium">WTD</th>
-                  </>
+                  <Fragment key={c.key}>
+                    <th className="px-3 py-2 text-right font-medium border-l">Goal</th>
+                    <th className="px-3 py-2 text-right font-medium">Actual</th>
+                    <th className="px-3 py-2 text-right font-medium">WTD</th>
+                  </Fragment>
                 ))}
               </tr>
             </thead>
