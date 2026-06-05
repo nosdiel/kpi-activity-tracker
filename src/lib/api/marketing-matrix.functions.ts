@@ -197,19 +197,74 @@ export const getPosMenu = createServerFn({ method: "POST" })
       const tok = await toastAuth(base, loc.toast_client_id, loc.toast_client_secret);
       let items = await toastMenu(base, tok, loc.toast_restaurant_guid);
       if (items.length === 0) {
-        // Analytics-API fallback: derive item catalog from the last ~30 days of menu reporting.
-        const end = new Date();
-        const start = new Date();
-        start.setUTCDate(start.getUTCDate() - 30);
-        const startISO = start.toISOString().slice(0, 10);
-        const endISO = end.toISOString().slice(0, 10);
-        const rows = await toastAnalyticsItemRows(base, tok, loc.toast_restaurant_guid, startISO, endISO);
-        const seen = new Map<string, string>();
-        for (const row of rows) {
-          const name = String(row.menuItemName ?? row.menuItem ?? row.itemName ?? row.name ?? "").trim();
-          if (name && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+        // Analytics-API fallback (same endpoint the sync uses): /era/v1/menu/day
+        const seen = new Map<string, { id: string; name: string }>();
+        const today = new Date();
+        let lastErr = "";
+        for (let i = 1; i <= 14 && seen.size < 1000; i++) {
+          const d = new Date(today);
+          d.setUTCDate(d.getUTCDate() - i);
+          const compact = Number(d.toISOString().slice(0, 10).replace(/-/g, ""));
+          try {
+            const createRes = await fetchWithTimeout(
+              `${base}/era/v1/menu/day`,
+              {
+                method: "POST",
+                headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  startBusinessDate: compact,
+                  endBusinessDate: compact,
+                  restaurantIds: [loc.toast_restaurant_guid],
+                  excludedRestaurantIds: [],
+                  groupBy: ["MENU_ITEM"],
+                }),
+              },
+              8_000
+            );
+            if (!createRes.ok) {
+              lastErr = `create ${createRes.status}: ${(await createRes.text()).slice(0, 200)}`;
+              continue;
+            }
+            const raw = await createRes.text();
+            let guid = "";
+            try {
+              const p = JSON.parse(raw);
+              guid = typeof p === "string" ? p : (p?.reportRequestGuid ?? "");
+            } catch {
+              guid = raw.replace(/^"|"$/g, "");
+            }
+            if (!guid) continue;
+            const deadline = Date.now() + 12_000;
+            while (Date.now() < deadline) {
+              const r = await fetchWithTimeout(
+                `${base}/era/v1/menu/${guid}`,
+                { headers: { Authorization: `Bearer ${tok}` } },
+                8_000
+              );
+              if (r.status === 200) {
+                const body = await r.json();
+                const rows: any[] = Array.isArray(body) ? body : Array.isArray((body as any)?.data) ? (body as any).data : [];
+                for (const row of rows) {
+                  const id = String(row?.menuItemGuid ?? row?.menuItemId ?? "").trim();
+                  const name = String(row?.menuItemName ?? "").trim();
+                  if (id && name && !seen.has(id)) seen.set(id, { id, name });
+                }
+                break;
+              }
+              if (r.status !== 202 && r.status !== 204) {
+                lastErr = `poll ${r.status}: ${(await r.text()).slice(0, 200)}`;
+                break;
+              }
+              await new Promise((res) => setTimeout(res, 1500));
+            }
+          } catch (e) {
+            lastErr = (e as Error).message;
+          }
         }
-        items = [...seen.values()].sort((a, b) => a.localeCompare(b)).map((n) => ({ id: n, name: n }));
+        items = [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+        if (items.length === 0) {
+          return { provider, items, manual_required: false, error: `Analytics fallback returned no items. ${lastErr}` };
+        }
       }
       return { provider, items, manual_required: false };
     } catch (e) {
