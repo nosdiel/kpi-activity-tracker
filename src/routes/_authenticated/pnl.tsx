@@ -356,6 +356,10 @@ function WeeklyPnlPage() {
           <Button variant="outline" size="sm" asChild>
             <Link to="/pnl-qtr">QTR Report</Link>
           </Button>
+          <Button variant="outline" size="sm" onClick={handleToastRefresh} disabled={refreshingToast || !locationId || dates.length !== 7}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshingToast ? "animate-spin" : ""}`} />
+            {refreshingToast ? "Refreshing Toast…" : "Refresh Toast Data"}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" /> Refresh
           </Button>
@@ -435,9 +439,9 @@ function WeeklyPnlPage() {
             <ReadonlyAmount value={foodSales} />
             <PctCell>—</PctCell>
           </Row>
-          <Row label="Outside Sales" i={1}>
-            <AmountInput value={outsideSales} onChange={setOutsideSales} />
-            <PctCell>{pctFmt(pctOf(outsideSalesN))}</PctCell>
+          <Row label="Catering Order" i={1}>
+            <AmountInput value={catering} onChange={setCatering} />
+            <PctCell>{pctFmt(pctOf(cateringN))}</PctCell>
           </Row>
 
           <TotalRow label="Total Sales" value={money(totalSales)} />
