@@ -22,13 +22,34 @@ async function loadLocation(locationId: string) {
   const { data, error } = await supabaseAdmin
     .from("locations")
     .select(
-      "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret,toast_api_url"
+      "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret,toast_analytics_client_id,toast_analytics_client_secret,toast_api_url"
     )
     .eq("id", locationId)
     .maybeSingle();
   if (error) throw new Error(error.message);
   if (!data) throw new Error("Location not found");
   return data as any;
+}
+
+// Pick the right Toast credential pair. Falls back to the other if only one is set.
+// - "standard" → Orders/Menu/Config API (toast_client_id/secret)
+// - "analytics" → Analytics Menu Reporting (toast_analytics_client_id/secret)
+function pickToastCreds(
+  loc: any,
+  kind: "standard" | "analytics"
+): { clientId: string; clientSecret: string } {
+  const std = { clientId: loc.toast_client_id as string | null, clientSecret: loc.toast_client_secret as string | null };
+  const ana = {
+    clientId: loc.toast_analytics_client_id as string | null,
+    clientSecret: loc.toast_analytics_client_secret as string | null,
+  };
+  const primary = kind === "analytics" ? ana : std;
+  const fallback = kind === "analytics" ? std : ana;
+  const chosen = primary.clientId && primary.clientSecret ? primary : fallback;
+  if (!chosen.clientId || !chosen.clientSecret) {
+    throw new Error(`Toast ${kind} credentials are not configured for this location`);
+  }
+  return { clientId: chosen.clientId, clientSecret: chosen.clientSecret };
 }
 
 function inferProvider(loc: any): "square" | "toast" {
@@ -585,12 +606,19 @@ export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
       };
     }
 
-    // Toast
+    // Toast — two separate credential sets:
+    //   • Standard/Orders API → orders, checks, menu/config
+    //   • Analytics API       → Analytics Menu Reporting (era/v1)
+    // Each gets its own token. If only one credential set is configured,
+    // pickToastCreds() falls back to whichever is present.
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
-    const tok = await toastAuth(base, loc.toast_client_id, loc.toast_client_secret);
+
+    // Try the Orders API first (requires standard creds w/ orders:read).
     try {
-      const currentChecks = await fetchToastChecks(base, tok, loc.toast_restaurant_guid, data.start_date, data.end_date);
-      const priorChecks = await fetchToastChecks(base, tok, loc.toast_restaurant_guid, prevStart, prevEnd);
+      const std = pickToastCreds(loc, "standard");
+      const ordersTok = await toastAuth(base, std.clientId, std.clientSecret);
+      const currentChecks = await fetchToastChecks(base, ordersTok, loc.toast_restaurant_guid, data.start_date, data.end_date);
+      const priorChecks = await fetchToastChecks(base, ordersTok, loc.toast_restaurant_guid, prevStart, prevEnd);
       return {
         provider,
         location_name: loc.name,
@@ -604,9 +632,12 @@ export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
     } catch (e) {
       if (!isPermissionError(e)) throw e;
       // Analytics-only fallback: units sold + revenue by menu item, no basket data.
+      // Auth with the Analytics credential (separate client ID/secret).
+      const ana = pickToastCreds(loc, "analytics");
+      const analyticsTok = await toastAuth(base, ana.clientId, ana.clientSecret);
       const [curRows, priorRows] = await Promise.all([
-        toastAnalyticsItemRows(base, tok, loc.toast_restaurant_guid, data.start_date, data.end_date),
-        toastAnalyticsItemRows(base, tok, loc.toast_restaurant_guid, prevStart, prevEnd),
+        toastAnalyticsItemRows(base, analyticsTok, loc.toast_restaurant_guid, data.start_date, data.end_date),
+        toastAnalyticsItemRows(base, analyticsTok, loc.toast_restaurant_guid, prevStart, prevEnd),
       ]);
       const current = analyzeAnalyticsRows(curRows, data.item_name, data.start_date, data.end_date);
       const prior = analyzeAnalyticsRows(priorRows, data.item_name, prevStart, prevEnd);
@@ -617,7 +648,7 @@ export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
         item_name: data.item_name,
         analytics_only: true,
         notice:
-          "Toast credentials only have Analytics access. Showing units sold and item revenue from the Analytics Menu report. Co-purchase/attach-rate analysis requires the orders:read scope.",
+          "Standard/Orders API was not authorized for this Toast location. Showing units sold and item revenue from the Analytics Menu report. Co-purchase/attach-rate analysis requires the orders:read scope on the Standard API credential.",
         current,
         prior,
       };
