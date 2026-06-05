@@ -73,11 +73,16 @@ function TargetsPage() {
   useEffect(() => {
     if (!locationId && locationsQ.data?.[0]) setLocationId(locationsQ.data[0].id);
   }, [locationsQ.data, locationId]);
+  const fiscalYears = useMemo(() => withFY2027(fyQ.data ?? []), [fyQ.data]);
   useEffect(() => {
-    if (fy === null && fyQ.data?.[0]) setFy(fyQ.data[0].fiscal_year);
-  }, [fyQ.data, fy]);
+    if (fy === null && fiscalYears.length > 0) {
+      const today = new Date().toISOString().slice(0, 10);
+      const current = fiscalYears.find((r) => r.start_date <= today) ?? fiscalYears[0];
+      setFy(current.fiscal_year);
+    }
+  }, [fiscalYears, fy]);
 
-  const fyRow = useMemo(() => fyQ.data?.find((r) => r.fiscal_year === fy) ?? null, [fyQ.data, fy]);
+  const fyRow = useMemo(() => fiscalYears.find((r) => r.fiscal_year === fy) ?? null, [fiscalYears, fy]);
   const qRange = quarterWeekRange(quarter);
   const weeks = Array.from({ length: qRange.end - qRange.start + 1 }, (_, i) => qRange.start + i);
 
