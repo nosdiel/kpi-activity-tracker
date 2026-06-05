@@ -195,10 +195,25 @@ export const getPosMenu = createServerFn({ method: "POST" })
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
     try {
       const tok = await toastAuth(base, loc.toast_client_id, loc.toast_client_secret);
-      const items = await toastMenu(base, tok, loc.toast_restaurant_guid);
-      return { provider, items, manual_required: items.length === 0 };
-    } catch {
-      return { provider, items: [] as MenuItem[], manual_required: true };
+      let items = await toastMenu(base, tok, loc.toast_restaurant_guid);
+      if (items.length === 0) {
+        // Analytics-API fallback: derive item catalog from the last ~30 days of menu reporting.
+        const end = new Date();
+        const start = new Date();
+        start.setUTCDate(start.getUTCDate() - 30);
+        const startISO = start.toISOString().slice(0, 10);
+        const endISO = end.toISOString().slice(0, 10);
+        const rows = await toastAnalyticsItemRows(base, tok, loc.toast_restaurant_guid, startISO, endISO);
+        const seen = new Map<string, string>();
+        for (const row of rows) {
+          const name = String(row.menuItemName ?? row.menuItem ?? row.itemName ?? row.name ?? "").trim();
+          if (name && !seen.has(name.toLowerCase())) seen.set(name.toLowerCase(), name);
+        }
+        items = [...seen.values()].sort((a, b) => a.localeCompare(b)).map((n) => ({ id: n, name: n }));
+      }
+      return { provider, items, manual_required: false };
+    } catch (e) {
+      return { provider, items: [] as MenuItem[], manual_required: false, error: (e as Error).message };
     }
   });
 

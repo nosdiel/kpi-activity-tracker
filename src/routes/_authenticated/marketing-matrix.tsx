@@ -49,9 +49,6 @@ function MarketingMatrixPage() {
 
   const [locationId, setLocationId] = useState<string>("");
   const [itemId, setItemId] = useState<string>("");
-  const [manualMode, setManualMode] = useState<boolean>(false);
-  const [manualName, setManualName] = useState<string>("");
-  const [manualPosProduct, setManualPosProduct] = useState<string>("");
   const [startDate, setStartDate] = useState<string>(isoDaysAgo(14));
   const [endDate, setEndDate] = useState<string>(isoDaysAgo(1));
 
@@ -69,33 +66,15 @@ function MarketingMatrixPage() {
     setItemId("");
   }, [locationId]);
 
-  // Auto-enable manual mode when POS won't return a menu.
-  useEffect(() => {
-    if (menuQ.data?.manual_required) setManualMode(true);
-    if (menuQ.error) setManualMode(true);
-  }, [menuQ.data, menuQ.error]);
-
   const runMut = useMutation({
     mutationFn: () => {
-      let item_id = "";
-      let item_name = "";
-      if (manualMode) {
-        const name = manualName.trim();
-        const pos = (manualPosProduct.trim() || name);
-        if (!name) throw new Error("Enter the marketed item name");
-        item_id = pos;
-        item_name = pos;
-      } else {
-        const found = menuQ.data?.items.find((i) => i.id === itemId);
-        if (!found) throw new Error("Pick an item");
-        item_id = found.id;
-        item_name = found.name;
-      }
+      const found = menuQ.data?.items.find((i) => i.id === itemId);
+      if (!found) throw new Error("Pick an item");
       return runFn({
         data: {
           location_id: locationId,
-          item_id,
-          item_name,
+          item_id: found.id,
+          item_name: found.name,
           start_date: startDate,
           end_date: endDate,
         },
@@ -155,57 +134,32 @@ function MarketingMatrixPage() {
           </div>
 
           <div className="space-y-1.5 md:col-span-2">
-            <div className="flex items-center justify-between">
-              <Label>Marketed item</Label>
-              <button
-                type="button"
-                onClick={() => setManualMode((m) => !m)}
-                className="text-xs text-muted-foreground hover:text-foreground underline"
-              >
-                {manualMode ? "Pick from POS menu" : "Enter manually"}
-              </button>
-            </div>
-
-            {manualMode ? (
-              <div className="grid grid-cols-2 gap-2">
-                <Input
-                  placeholder="Name (e.g. Guava Pastry)"
-                  value={manualName}
-                  onChange={(e) => setManualName(e.target.value)}
+            <Label>Marketed item</Label>
+            <Select value={itemId} onValueChange={setItemId} disabled={!menuQ.data || menuQ.data.items.length === 0}>
+              <SelectTrigger>
+                <SelectValue
+                  placeholder={
+                    !locationId
+                      ? "Select location first"
+                      : menuQ.isLoading
+                      ? "Loading menu…"
+                      : (menuQ.data?.items.length ?? 0) === 0
+                      ? "No menu items returned by POS"
+                      : "Select item"
+                  }
                 />
-                <Input
-                  placeholder="POS Product (matches line item name)"
-                  value={manualPosProduct}
-                  onChange={(e) => setManualPosProduct(e.target.value)}
-                />
-              </div>
-            ) : (
-              <Select value={itemId} onValueChange={setItemId} disabled={!menuQ.data || menuQ.data.items.length === 0}>
-                <SelectTrigger>
-                  <SelectValue
-                    placeholder={
-                      !locationId
-                        ? "Select location first"
-                        : menuQ.isLoading
-                        ? "Loading menu…"
-                        : (menuQ.data?.items.length ?? 0) === 0
-                        ? "Menu unavailable — use manual entry"
-                        : "Select item"
-                    }
-                  />
-                </SelectTrigger>
-                <SelectContent className="max-h-[320px]">
-                  {(menuQ.data?.items ?? []).map((i) => (
-                    <SelectItem key={i.id} value={i.id}>
-                      {i.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-            {menuQ.data?.manual_required && !manualMode && (
-              <p className="text-xs text-amber-600">
-                POS menu access isn't available for this location — switch to manual entry.
+              </SelectTrigger>
+              <SelectContent className="max-h-[320px]">
+                {(menuQ.data?.items ?? []).map((i) => (
+                  <SelectItem key={i.id} value={i.id}>
+                    {i.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {menuQ.error && (
+              <p className="text-xs text-destructive">
+                Failed to load POS menu: {(menuQ.error as Error).message}
               </p>
             )}
           </div>
@@ -228,7 +182,7 @@ function MarketingMatrixPage() {
               onClick={() => runMut.mutate()}
               disabled={
                 !locationId ||
-                (manualMode ? !manualName.trim() : !itemId) ||
+                !itemId ||
                 runMut.isPending
               }
             >
