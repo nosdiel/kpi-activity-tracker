@@ -371,26 +371,28 @@ function QtrPage() {
               </tr>
             </thead>
             <tbody>
-              {groups.map((grp) => (
-                grp.map((w, idx) => {
-                  const row = rows.find((r) => r.week === w);
-                  return (
-                    <tr key={w} className="border-t">
-                      {idx === 0 && (
-                        <td
-                          rowSpan={grp.length}
-                          className="px-3 py-2 text-center align-middle font-semibold text-muted-foreground border-r bg-muted/30"
-                        >
-                          QTR {quarter}
-                        </td>
-                      )}
-                      <td className="px-3 py-2">Week {w}</td>
-                      {CATEGORIES.map((c) => (
-                        <Cells key={c.key} val={row?.vals[c.key] ?? { goal: 0, actual: 0 }} />
-                      ))}
-                    </tr>
-                  );
-                })
+              {groups.map((grp, gi) => (
+                <Fragment key={gi}>
+                  {grp.map((w, idx) => {
+                    const row = rows.find((r) => r.week === w);
+                    return (
+                      <tr key={w} className="border-t">
+                        {idx === 0 && (
+                          <td
+                            rowSpan={grp.length}
+                            className="px-3 py-2 text-center align-middle font-semibold text-muted-foreground border-r bg-muted/30"
+                          >
+                            QTR {quarter}
+                          </td>
+                        )}
+                        <td className="px-3 py-2">Week {w}</td>
+                        {CATEGORIES.map((c) => (
+                          <Cells key={c.key} val={row?.vals[c.key] ?? { goal: 0, actual: 0 }} />
+                        ))}
+                      </tr>
+                    );
+                  })}
+                </Fragment>
               ))}
               <tr className="bg-[#0a1f4a] text-white font-semibold">
                 <td className="px-3 py-3 text-center">QTD {quarter}</td>
