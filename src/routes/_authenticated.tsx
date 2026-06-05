@@ -8,12 +8,14 @@ import {
   PhoneCall,
   Settings,
   LogOut,
+  Megaphone,
 } from "lucide-react";
 
 const NAV = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/pnl", label: "P&L", icon: FileBarChart },
   { to: "/pnl-bonus", label: "Bonus Calculator", icon: Calculator },
+  { to: "/marketing-matrix", label: "Marketing Matrix", icon: Megaphone },
   { to: "/who-to-call", label: "Who to Call", icon: PhoneCall },
 ] as const;
 
