@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+
 import { RefreshCw, Save, Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getCateringSales, getToastCateringDiagnostics } from "@/lib/api/catering-sales.functions";
+
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,23 +110,6 @@ function WeeklyPnlPage() {
   const [fy, setFy] = useState<number | null>(null);
   const [week, setWeek] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [refreshingToast, setRefreshingToast] = useState(false);
-  const [diagLoading, setDiagLoading] = useState(false);
-  const [diagResult, setDiagResult] = useState<null | {
-    location: { id: string; name: string; restaurantGuid: string };
-    endpoint: string;
-    requestBody: unknown;
-    reportRequestGuid: string;
-    rowCount: number;
-    rows: Array<{
-      diningOption: string | null;
-      netSalesAmount: number | null;
-      grossSalesAmount: number | null;
-      businessDate: string | null;
-      restaurantGuid: string;
-      raw: string;
-    }>;
-  }>(null);
 
   // Editable state
   const [catering, setCatering] = useState("");
@@ -294,48 +277,8 @@ function WeeklyPnlPage() {
     clear();
   };
 
-  const cateringFn = useServerFn(getCateringSales);
-  const diagFn = useServerFn(getToastCateringDiagnostics);
-  const handleToastDiagnostics = async () => {
-    if (!locationId || dates.length !== 7) return;
-    setDiagLoading(true);
-    setDiagResult(null);
-    try {
-      const res = await diagFn({
-        data: { location_id: locationId, start_date: dates[0], end_date: dates[6] },
-      });
-      setDiagResult(res);
-      toast.success(`Toast returned ${res.rowCount} rows`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setDiagLoading(false);
-    }
-  };
   const handleRefresh = () => { pnlQ.refetch(); salesQ.refetch(); };
-  const handleToastRefresh = async () => {
-    if (!locationId || !fy || !week || dates.length !== 7) return;
-    setRefreshingToast(true);
-    try {
-      const res = await cateringFn({
-        data: {
-          location_ids: [locationId],
-          start_date: dates[0],
-          end_date: dates[6],
-          fiscal_year: fy,
-          weeks: [{ fiscal_week: week, start_date: dates[0], end_date: dates[6] }],
-        },
-      });
-      const total = (res.results ?? []).reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
-      setCatering(total ? String(total) : "");
-      if ((res.errors ?? []).length > 0) toast.error(res.errors[0].message);
-      else toast.success("Toast catering actual loaded");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setRefreshingToast(false);
-    }
-  };
+
 
   const handleSave = async () => {
     if (!locationId || !fy || !week) return;
@@ -388,13 +331,6 @@ function WeeklyPnlPage() {
           <Button variant="outline" size="sm" disabled>Weekly P&L</Button>
           <Button variant="outline" size="sm" asChild>
             <Link to="/pnl-qtr">QTR Report</Link>
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleToastRefresh} disabled={refreshingToast || !locationId || dates.length !== 7}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshingToast ? "animate-spin" : ""}`} />
-            {refreshingToast ? "Refreshing Toast…" : "Refresh Toast Data"}
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleToastDiagnostics} disabled={diagLoading || !locationId || dates.length !== 7}>
-            {diagLoading ? "Diagnosing…" : "Catering Toast Diagnostics"}
           </Button>
           <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" /> Refresh
@@ -475,10 +411,8 @@ function WeeklyPnlPage() {
             <ReadonlyAmount value={foodSales} />
             <PctCell>—</PctCell>
           </Row>
-          <Row label="Catering Order" i={1}>
-            <AmountInput value={catering} onChange={setCatering} />
-            <PctCell>{pctFmt(pctOf(cateringN))}</PctCell>
-          </Row>
+
+
 
           <TotalRow label="Total Sales" value={money(totalSales)} />
 
@@ -555,64 +489,6 @@ function WeeklyPnlPage() {
           </div>
         </div>
       </Card>
-
-      {diagResult && (
-        <Card>
-          <CardContent className="pt-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold">Catering Toast Diagnostics</h3>
-                <p className="text-xs text-muted-foreground">
-                  {diagResult.location.name} · restaurantGuid {diagResult.location.restaurantGuid}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  POST {diagResult.endpoint} · reportRequestGuid {diagResult.reportRequestGuid} · {diagResult.rowCount} rows
-                </p>
-              </div>
-              <Button variant="ghost" size="sm" onClick={() => setDiagResult(null)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            <pre className="text-xs bg-muted/40 p-3 rounded overflow-x-auto">
-{JSON.stringify(diagResult.requestBody, null, 2)}
-            </pre>
-            {diagResult.rows.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Toast returned 0 rows for this window.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b text-left">
-                      <th className="py-2 pr-3">diningOption</th>
-                      <th className="py-2 pr-3 text-right">netSalesAmount</th>
-                      <th className="py-2 pr-3 text-right">grossSalesAmount</th>
-                      <th className="py-2 pr-3">businessDate</th>
-                      <th className="py-2 pr-3">restaurantGuid</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {diagResult.rows.map((r, i) => (
-                      <tr key={i} className="border-b">
-                        <td className="py-1.5 pr-3">{r.diningOption ?? <em className="text-muted-foreground">(none)</em>}</td>
-                        <td className="py-1.5 pr-3 text-right tabular-nums">{r.netSalesAmount ?? "—"}</td>
-                        <td className="py-1.5 pr-3 text-right tabular-nums">{r.grossSalesAmount ?? "—"}</td>
-                        <td className="py-1.5 pr-3">{r.businessDate ?? "—"}</td>
-                        <td className="py-1.5 pr-3 font-mono text-xs">{r.restaurantGuid}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-            <details className="text-xs">
-              <summary className="cursor-pointer text-muted-foreground">Raw rows JSON</summary>
-              <pre className="bg-muted/40 p-3 rounded overflow-x-auto mt-2">
-{diagResult.rows.map((r) => r.raw).join("\n")}
-              </pre>
-            </details>
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }

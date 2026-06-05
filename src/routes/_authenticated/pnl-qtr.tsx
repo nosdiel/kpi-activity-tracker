@@ -3,12 +3,14 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { getCateringSales } from "@/lib/api/catering-sales.functions";
+import { getCateringSales, getToastCateringDiagnostics } from "@/lib/api/catering-sales.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { X } from "lucide-react";
 import {
   quarterWeekRange,
   shiftISODate,
@@ -222,6 +224,47 @@ function QtrPage() {
   });
 
   const cateringFn = useServerFn(getCateringSales);
+  const diagFn = useServerFn(getToastCateringDiagnostics);
+  const [diagLocation, setDiagLocation] = useState<string>("");
+  const [diagWeek, setDiagWeek] = useState<number | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagResult, setDiagResult] = useState<null | {
+    location: { id: string; name: string; restaurantGuid: string };
+    endpoint: string;
+    requestBody: unknown;
+    reportRequestGuid: string;
+    rowCount: number;
+    rows: Array<{
+      diningOption: string | null;
+      netSalesAmount: number | null;
+      grossSalesAmount: number | null;
+      businessDate: string | null;
+      restaurantGuid: string;
+      raw: string;
+    }>;
+  }>(null);
+  const handleToastDiagnostics = async () => {
+    if (!diagLocation || !diagWeek || !fyRow) {
+      toast.error("Pick a specific location and a week first");
+      return;
+    }
+    const wd = weekDates(fyRow.start_date, diagWeek);
+    if (wd.length !== 7) return;
+    setDiagLoading(true);
+    setDiagResult(null);
+    try {
+      const res = await diagFn({
+        data: { location_id: diagLocation, start_date: wd[0], end_date: wd[6] },
+      });
+      setDiagResult(res);
+      toast.success(`Toast returned ${res.rowCount} rows`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
   const cateringQ = useQuery({
     queryKey: ["qtr-catering", locIdsKey, firstWeekStart, lastWeekEnd],
     enabled: false,
@@ -506,6 +549,101 @@ function QtrPage() {
             </tbody>
           </table>
         </div>
+      </Card>
+
+      <Card>
+        <CardContent className="pt-6 space-y-4">
+          <div>
+            <h3 className="font-semibold">Catering Toast Diagnostics</h3>
+            <p className="text-xs text-muted-foreground">
+              Call Toast Analytics /era/v1/metrics/week (groupBy DINING_OPTION) and show every returned row — no filter.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <Field label="Location">
+              <Select value={diagLocation} onValueChange={setDiagLocation}>
+                <SelectTrigger><SelectValue placeholder="Pick a specific location" /></SelectTrigger>
+                <SelectContent>
+                  {filteredLocations.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Fiscal Week">
+              <Select value={diagWeek?.toString() ?? ""} onValueChange={(v) => setDiagWeek(Number(v))}>
+                <SelectTrigger><SelectValue placeholder="Pick a week" /></SelectTrigger>
+                <SelectContent>
+                  {weeks.map((w) => {
+                    const r = weekDateRanges.get(w);
+                    const label = r ? `Week ${w} (${r[0]} → ${r[1]})` : `Week ${w}`;
+                    return <SelectItem key={w} value={String(w)}>{label}</SelectItem>;
+                  })}
+                </SelectContent>
+              </Select>
+            </Field>
+            <div className="flex items-end">
+              <Button onClick={handleToastDiagnostics} disabled={diagLoading || !diagLocation || !diagWeek}>
+                {diagLoading ? "Diagnosing…" : "Run diagnostics"}
+              </Button>
+            </div>
+          </div>
+
+          {diagResult && (
+            <div className="space-y-3 border-t pt-4">
+              <div className="flex items-start justify-between">
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    {diagResult.location.name} · restaurantGuid <span className="font-mono text-xs">{diagResult.location.restaurantGuid}</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    POST {diagResult.endpoint} · reportRequestGuid {diagResult.reportRequestGuid} · {diagResult.rowCount} rows
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => setDiagResult(null)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <pre className="text-xs bg-muted/40 p-3 rounded overflow-x-auto">
+{JSON.stringify(diagResult.requestBody, null, 2)}
+              </pre>
+              {diagResult.rows.length === 0 ? (
+                <p className="text-sm text-muted-foreground">Toast returned 0 rows for this window.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="py-2 pr-3">diningOption</th>
+                        <th className="py-2 pr-3 text-right">netSalesAmount</th>
+                        <th className="py-2 pr-3 text-right">grossSalesAmount</th>
+                        <th className="py-2 pr-3">businessDate</th>
+                        <th className="py-2 pr-3">restaurantGuid</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {diagResult.rows.map((r, i) => (
+                        <tr key={i} className="border-b">
+                          <td className="py-1.5 pr-3">{r.diningOption ?? <em className="text-muted-foreground">(none)</em>}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">{r.netSalesAmount ?? "—"}</td>
+                          <td className="py-1.5 pr-3 text-right tabular-nums">{r.grossSalesAmount ?? "—"}</td>
+                          <td className="py-1.5 pr-3">{r.businessDate ?? "—"}</td>
+                          <td className="py-1.5 pr-3 font-mono text-xs">{r.restaurantGuid}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              <details className="text-xs">
+                <summary className="cursor-pointer text-muted-foreground">Raw rows JSON</summary>
+                <pre className="bg-muted/40 p-3 rounded overflow-x-auto mt-2">
+{diagResult.rows.map((r) => r.raw).join("\n")}
+                </pre>
+              </details>
+            </div>
+          )}
+        </CardContent>
       </Card>
     </div>
   );
