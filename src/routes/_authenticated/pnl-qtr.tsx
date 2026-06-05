@@ -234,6 +234,8 @@ function QtrPage() {
     requestBody: unknown;
     reportRequestGuid: string;
     rowCount: number;
+    cateringNetTotalCents: number;
+    cateringBreakdown: Array<{ business_date: string; amount_cents: number }>;
     rows: Array<{
       diningOption: string | null;
       netSalesAmount: number | null;
@@ -254,7 +256,7 @@ function QtrPage() {
     setDiagResult(null);
     try {
       const res = await diagFn({
-        data: { location_id: diagLocation, start_date: wd[0], end_date: wd[6] },
+        data: { location_id: diagLocation, start_date: wd[0], end_date: wd[6], fiscal_year: fy ?? undefined, fiscal_week: diagWeek },
       });
       setDiagResult(res);
       toast.success(`Toast returned ${res.rowCount} rows`);
