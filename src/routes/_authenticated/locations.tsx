@@ -219,6 +219,19 @@ function LocationsPage() {
               </div>
             </div>
             <div className="space-y-2">
+              <Label>Payroll Goal (% of Sales)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                placeholder="e.g. 28.5"
+                value={form.payroll_pct_of_sales}
+                onChange={(e) => setForm({ ...form, payroll_pct_of_sales: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">Used in QTR Report to compute Payroll goal = % × Actual Sales.</p>
+            </div>
+            <div className="space-y-2">
               <Label>Address</Label>
               <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
             </div>
