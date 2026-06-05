@@ -483,6 +483,40 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                   placeholder="Paste secret (leave blank to keep current)"
                 />
               </div>
+
+              <div className="md:col-span-2 pt-4 border-t border-border/60">
+                <p className="text-sm font-semibold text-foreground">Toast Analytics API credentials</p>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Separate client ID/secret for the Analytics API (era/v1 Menu Reporting). Leave blank to fall back to the Standard/Orders credentials above.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>Analytics Client ID</Label>
+                <Input
+                  value={form.toast_analytics_client_id}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, toast_analytics_client_id: e.target.value }))
+                  }
+                  autoComplete="off"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  Analytics Client secret{" "}
+                  {editing?.toast_analytics_secret_set && (
+                    <span className="text-xs text-muted-foreground">— currently set</span>
+                  )}
+                </Label>
+                <Input
+                  type="password"
+                  value={form.toast_analytics_client_secret}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, toast_analytics_client_secret: e.target.value }))
+                  }
+                  autoComplete="off"
+                  placeholder="Paste secret (leave blank to keep current)"
+                />
+              </div>
             </div>
           )}
 
@@ -500,6 +534,9 @@ export function PosPage({ source }: { source: "square" | "toast" }) {
                   payload.toast_restaurant_guid = form.toast_restaurant_guid;
                   payload.toast_client_id = form.toast_client_id;
                   if (form.toast_client_secret) payload.toast_client_secret = form.toast_client_secret;
+                  payload.toast_analytics_client_id = form.toast_analytics_client_id;
+                  if (form.toast_analytics_client_secret)
+                    payload.toast_analytics_client_secret = form.toast_analytics_client_secret;
                 }
                 credsMut.mutate(payload);
               }}
