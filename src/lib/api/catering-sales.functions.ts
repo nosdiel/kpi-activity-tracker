@@ -498,39 +498,23 @@ export const getCateringSales = createServerFn({ method: "POST" })
           }
         } else if (loc.pos_provider === "toast" && loc.toast_restaurant_guid) {
           const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
-          const creds = pickToastCreds(loc);
-          if (!creds) throw new Error("Toast credentials not configured");
+          const creds = pickToastCreds(loc, { analyticsOnly: true });
+          if (!creds) throw new Error("Toast Analytics credentials not configured");
           const token = await toastAccessToken(base, creds.clientId, creds.clientSecret);
-          try {
-            for (const week of requestedWeeks) {
-              locResults.push(
-                ...(await toastCateringRangeByDiningOption(
-                  supabaseAdmin,
-                  base,
-                  token,
-                  loc.toast_restaurant_guid,
-                  loc.id,
-                  week.start_date,
-                  week.end_date,
-                  data.fiscal_year,
-                  week.fiscal_week
-                ))
-              );
-            }
-          } catch (metricsError) {
-            if ((metricsError as any)?.rateLimited) throw metricsError;
-            try {
-              const cateringGuids = await toastCateringDiningOptionGuids(base, token, loc.toast_restaurant_guid);
-              for (const week of requestedWeeks) {
-                for (const d of isoRangeDates(week.start_date, week.end_date)) {
-                  const amt = await toastCateringDay(base, token, loc.toast_restaurant_guid, d, cateringGuids);
-                  if (amt > 0) locResults.push({ location_id: loc.id, business_date: d, amount: amt });
-                }
-              }
-            } catch {
-              throw metricsError;
-            }
-            if (locResults.length === 0) throw metricsError;
+          for (const week of requestedWeeks) {
+            locResults.push(
+              ...(await toastCateringRangeByDiningOption(
+                supabaseAdmin,
+                base,
+                token,
+                loc.toast_restaurant_guid,
+                loc.id,
+                week.start_date,
+                week.end_date,
+                data.fiscal_year,
+                week.fiscal_week
+              ))
+            );
           }
         }
       } catch (e) {
