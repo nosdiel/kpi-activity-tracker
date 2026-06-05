@@ -263,26 +263,30 @@ function MarketingMatrixPage() {
               delta={result.current.units_sold - result.prior.units_sold}
             />
             <MetricCard
-              label="Attach rate"
-              value={fmtPct(result.current.attach_rate)}
-              prior={`vs ${fmtPct(result.prior.attach_rate)} LY`}
-              delta={result.current.attach_rate - result.prior.attach_rate}
-              suffix="pp"
-            />
-            <MetricCard
-              label="Avg check w/ item"
-              value={fmtMoney(result.current.avg_check_with)}
-              prior={`w/o: ${fmtMoney(result.current.avg_check_without)}`}
-              delta={result.current.avg_check_with - result.current.avg_check_without}
-              money
-            />
-            <MetricCard
-              label="Add-on revenue"
+              label={result.analytics_only ? "Item revenue" : "Add-on revenue"}
               value={fmtMoney(result.current.addon_revenue)}
               prior={`vs ${fmtMoney(result.prior.addon_revenue)} LY`}
               delta={result.current.addon_revenue - result.prior.addon_revenue}
               money
             />
+            {!result.analytics_only && (
+              <>
+                <MetricCard
+                  label="Attach rate"
+                  value={fmtPct(result.current.attach_rate)}
+                  prior={`vs ${fmtPct(result.prior.attach_rate)} LY`}
+                  delta={result.current.attach_rate - result.prior.attach_rate}
+                  suffix="pp"
+                />
+                <MetricCard
+                  label="Avg check w/ item"
+                  value={fmtMoney(result.current.avg_check_with)}
+                  prior={`w/o: ${fmtMoney(result.current.avg_check_without)}`}
+                  delta={result.current.avg_check_with - result.current.avg_check_without}
+                  money
+                />
+              </>
+            )}
           </div>
 
           <Card>
