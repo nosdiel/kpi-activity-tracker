@@ -10,25 +10,25 @@ runConfig:
 
 env:
   - variable: SUPABASE_URL
-    value: "https://rktoodsrharkqbpkqoil.supabase.co"
+    value: "https://gcplpjgpwxwezuohnkly.supabase.co"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: VITE_SUPABASE_URL
-    value: "https://rktoodsrharkqbpkqoil.supabase.co"
+    value: "https://gcplpjgpwxwezuohnkly.supabase.co"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: SUPABASE_PUBLISHABLE_KEY
-    value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrdG9vZHNyaGFya3FicGtxb2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDgwNDQsImV4cCI6MjA5NjE4NDA0NH0.NRf4cASQRbI45mN0OzvRmnO974oznqq2ivcOCcF47Og"
+    value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjcGxwamdwd3h3ZXp1b2hua2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDc0ODAsImV4cCI6MjA5NjA4MzQ4MH0.vyuo7ZXpJE92Ur91kxTvPqf79_EA0g367VDNFz0kn-c"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: VITE_SUPABASE_PUBLISHABLE_KEY
-    value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJrdG9vZHNyaGFya3FicGtxb2lsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDgwNDQsImV4cCI6MjA5NjE4NDA0NH0.NRf4cASQRbI45mN0OzvRmnO974oznqq2ivcOCcF47Og"
+    value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdjcGxwamdwd3h3ZXp1b2hua2x5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA1MDc0ODAsImV4cCI6MjA5NjA4MzQ4MH0.vyuo7ZXpJE92Ur91kxTvPqf79_EA0g367VDNFz0kn-c"
     availability:
       - BUILD
       - RUNTIME
