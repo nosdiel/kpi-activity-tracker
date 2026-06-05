@@ -144,7 +144,7 @@ function MarketingMatrixPage() {
                       : menuQ.isLoading
                       ? "Loading menu…"
                       : (menuQ.data?.items.length ?? 0) === 0
-                      ? "No menu items returned by POS"
+                      ? "No trackable items mapped for this location"
                       : "Select item"
                   }
                 />
