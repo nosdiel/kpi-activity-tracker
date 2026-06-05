@@ -399,8 +399,9 @@ const toastExtendedLocationColumns = `${toastBaseLocationColumns},toast_api_url,
 function isMissingToastMetadataColumn(error: { message?: string; code?: string; details?: string } | null | undefined) {
   if (!error) return false;
   const blob = `${error.message ?? ""} ${error.details ?? ""}`;
-  if (error.code === "42703" && (blob.includes("toast_credential_name") || blob.includes("toast_api_url"))) return true;
-  return blob.includes("toast_credential_name") || blob.includes("toast_api_url");
+  const keys = ["toast_credential_name", "toast_api_url", "toast_analytics_client_id", "toast_analytics_client_secret"];
+  if (error.code === "42703" && keys.some((k) => blob.includes(k))) return true;
+  return keys.some((k) => blob.includes(k));
 }
 
 async function selectToastLocations(supabaseAdmin: any, locationId?: string) {
@@ -424,7 +425,7 @@ async function selectToastLocations(supabaseAdmin: any, locationId?: string) {
 async function selectLocationsPosStatus(supabaseAdmin: any) {
   const baseColumns =
     "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret";
-  const extendedColumns = `${baseColumns},toast_credential_name,toast_api_url`;
+  const extendedColumns = `${baseColumns},toast_credential_name,toast_api_url,toast_analytics_client_id,toast_analytics_client_secret`;
 
   const extended = await supabaseAdmin.from("locations").select(extendedColumns).order("name");
   if (!extended.error || !isMissingToastMetadataColumn(extended.error)) return extended;
