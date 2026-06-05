@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/pnl-qtr")({
   component: QtrPage,
 });
 
-type Location = { id: string; name: string; region: string | null };
+type Location = { id: string; name: string; region: string | null; payroll_pct_of_sales: number | null };
 type FY = { fiscal_year: number; start_date: string };
 type VendorLine = { name: string; amount: number };
 type VendorAmountsBlob = { food_cost?: VendorLine[]; paper_supplies?: VendorLine[] };
@@ -68,7 +68,7 @@ function QtrPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("locations")
-        .select("id,name,region")
+        .select("id,name,region,payroll_pct_of_sales")
         .eq("active", true)
         .order("name");
       if (error) throw error;
@@ -220,10 +220,13 @@ function QtrPage() {
 
   // Compute per-week values
   const rows = useMemo(() => {
-    // target pct per (location, week)
     const pctByLocWeek = new Map<string, number>();
     (targetsQ.data ?? []).forEach((r) =>
       pctByLocWeek.set(`${r.location_id}:${r.fiscal_week}`, Number(r.target_pct_over_ly ?? 0) / 100),
+    );
+    const payrollPctByLoc = new Map<string, number>();
+    (locationsQ.data ?? []).forEach((l) =>
+      payrollPctByLoc.set(l.id, Number(l.payroll_pct_of_sales ?? 0) / 100),
     );
 
     const pnlByWeek = new Map<number, { catering: number; wages: number; food: number; paper: number }>();
@@ -238,13 +241,17 @@ function QtrPage() {
 
     const salesByWeek = new Map<number, number>();
     const goalByWeek = new Map<number, number>();
+    const payrollGoalByWeek = new Map<number, number>();
     (salesQ.data ?? []).forEach((s) => {
       for (const [w, [start, end]] of weekDateRanges.entries()) {
         if (s.business_date >= start && s.business_date <= end) {
-          salesByWeek.set(w, (salesByWeek.get(w) ?? 0) + Number(s.actual_sales ?? 0));
+          const actual = Number(s.actual_sales ?? 0);
+          salesByWeek.set(w, (salesByWeek.get(w) ?? 0) + actual);
           const pct = pctByLocWeek.get(`${s.location_id}:${w}`) ?? 0;
           const ly = Number(s.last_year_sales ?? 0);
           goalByWeek.set(w, (goalByWeek.get(w) ?? 0) + ly * (1 + pct));
+          const ppct = payrollPctByLoc.get(s.location_id) ?? 0;
+          payrollGoalByWeek.set(w, (payrollGoalByWeek.get(w) ?? 0) + actual * ppct);
           break;
         }
       }
@@ -254,16 +261,17 @@ function QtrPage() {
       const sales = salesByWeek.get(w) ?? 0;
       const p = pnlByWeek.get(w) ?? { catering: 0, wages: 0, food: 0, paper: 0 };
       const salesGoal = goalByWeek.get(w) ?? 0;
+      const payrollGoal = payrollGoalByWeek.get(w) ?? 0;
       const vals: Record<CatKey, { goal: number; actual: number }> = {
         sales: { goal: salesGoal, actual: sales },
-        payroll: { goal: 0, actual: p.wages },
+        payroll: { goal: payrollGoal, actual: p.wages },
         food_cost: { goal: 0, actual: p.food },
         catering: { goal: 0, actual: p.catering },
         paper_good: { goal: 0, actual: p.paper },
       };
       return { week: w, vals };
     });
-  }, [targetsQ.data, pnlQ.data, salesQ.data, weeks, weekDateRanges]);
+  }, [targetsQ.data, pnlQ.data, salesQ.data, locationsQ.data, weeks, weekDateRanges]);
 
   // Totals
   const totals = useMemo(() => {

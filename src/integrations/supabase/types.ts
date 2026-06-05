@@ -95,6 +95,7 @@ export type Database = {
           created_at: string
           id: string
           name: string
+          payroll_pct_of_sales: number | null
           pos_provider: string | null
           region: string | null
           square_access_token: string | null
@@ -115,6 +116,7 @@ export type Database = {
           created_at?: string
           id?: string
           name: string
+          payroll_pct_of_sales?: number | null
           pos_provider?: string | null
           region?: string | null
           square_access_token?: string | null
@@ -135,6 +137,7 @@ export type Database = {
           created_at?: string
           id?: string
           name?: string
+          payroll_pct_of_sales?: number | null
           pos_provider?: string | null
           region?: string | null
           square_access_token?: string | null

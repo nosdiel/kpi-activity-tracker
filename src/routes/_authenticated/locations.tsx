@@ -29,6 +29,7 @@ type LocationRow = {
   timezone: string | null;
   address: string | null;
   active: boolean | null;
+  payroll_pct_of_sales: number | null;
 };
 
 type FormState = {
@@ -38,6 +39,7 @@ type FormState = {
   timezone: string;
   address: string;
   active: boolean;
+  payroll_pct_of_sales: string;
 };
 
 const emptyForm: FormState = {
@@ -46,6 +48,7 @@ const emptyForm: FormState = {
   timezone: "America/New_York",
   address: "",
   active: true,
+  payroll_pct_of_sales: "",
 };
 
 function LocationsPage() {
@@ -73,12 +76,14 @@ function LocationsPage() {
 
   const saveMut = useMutation({
     mutationFn: async (f: FormState) => {
+      const pctNum = f.payroll_pct_of_sales.trim() === "" ? null : Number(f.payroll_pct_of_sales);
       const payload = {
         name: f.name.trim(),
         region: f.region.trim() || null,
         timezone: f.timezone.trim() || null,
         address: f.address.trim() || null,
         active: f.active,
+        payroll_pct_of_sales: pctNum !== null && Number.isFinite(pctNum) ? pctNum : null,
       };
       if (f.id) {
         const { error } = await supabase.from("locations").update(payload).eq("id", f.id);
@@ -106,6 +111,7 @@ function LocationsPage() {
       timezone: row.timezone ?? "America/New_York",
       address: row.address ?? "",
       active: row.active ?? true,
+      payroll_pct_of_sales: row.payroll_pct_of_sales == null ? "" : String(row.payroll_pct_of_sales),
     });
     setOpen(true);
   };
@@ -211,6 +217,19 @@ function LocationsPage() {
                 <Label>Timezone</Label>
                 <Input value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
               </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Payroll Goal (% of Sales)</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                placeholder="e.g. 28.5"
+                value={form.payroll_pct_of_sales}
+                onChange={(e) => setForm({ ...form, payroll_pct_of_sales: e.target.value })}
+              />
+              <p className="text-xs text-muted-foreground">Used in QTR Report to compute Payroll goal = % × Actual Sales.</p>
             </div>
             <div className="space-y-2">
               <Label>Address</Label>
