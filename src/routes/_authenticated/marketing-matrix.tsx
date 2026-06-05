@@ -270,8 +270,8 @@ function MarketingMatrixPage() {
                   <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="prior" name="Last year" fill="hsl(var(--muted-foreground))" />
-                  <Bar dataKey="current" name="Campaign" fill="hsl(var(--primary))" />
+                  <Bar dataKey="prior" name="Last year" fill="hsl(var(--chart-2))" />
+                  <Bar dataKey="current" name="Campaign" fill="hsl(var(--chart-1))" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
