@@ -174,12 +174,8 @@ async function toastMenu(base: string, token: string, guid: string): Promise<Men
     }
     if (seen.size > 500) break;
   }
-  if (seen.size === 0) {
-    throw new Error(
-      "Toast credentials lack menus/config access and no recent orders were found. Grant 'menus.read' or 'config:read' scope to the Toast API client."
-    );
-  }
-  return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+  // No source available — caller will enable manual entry.
+  return [];
 }
 
 export const getPosMenu = createServerFn({ method: "POST" })
@@ -189,13 +185,17 @@ export const getPosMenu = createServerFn({ method: "POST" })
     const loc = await loadLocation(data.location_id);
     const provider = inferProvider(loc);
     if (provider === "square") {
-      const items = await squareMenu(loc.square_access_token);
-      return { provider, items };
+      try {
+        const items = await squareMenu(loc.square_access_token);
+        return { provider, items, manual_required: items.length === 0 };
+      } catch {
+        return { provider, items: [] as MenuItem[], manual_required: true };
+      }
     }
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
     const tok = await toastAuth(base, loc.toast_client_id, loc.toast_client_secret);
     const items = await toastMenu(base, tok, loc.toast_restaurant_guid);
-    return { provider, items };
+    return { provider, items, manual_required: items.length === 0 };
   });
 
 // ---------------- Order fetching ----------------
