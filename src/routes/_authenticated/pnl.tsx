@@ -393,6 +393,9 @@ function WeeklyPnlPage() {
             <RefreshCw className={`h-4 w-4 mr-2 ${refreshingToast ? "animate-spin" : ""}`} />
             {refreshingToast ? "Refreshing Toast…" : "Refresh Toast Data"}
           </Button>
+          <Button variant="outline" size="sm" onClick={handleToastDiagnostics} disabled={diagLoading || !locationId || dates.length !== 7}>
+            {diagLoading ? "Diagnosing…" : "Catering Toast Diagnostics"}
+          </Button>
           <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" /> Refresh
           </Button>
