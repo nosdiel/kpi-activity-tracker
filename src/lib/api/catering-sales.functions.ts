@@ -163,7 +163,13 @@ async function createToastDiningMetricsReport(
     8_000
   );
   if (res.status === 429) throw new ToastRateLimitError();
-  if (!res.ok) throw new Error(readableToastError(`Toast dining metrics create ${range}`, res.status));
+  if (!res.ok) {
+    const body = (await res.text()).slice(0, 300);
+    const hint = res.status === 401 || res.status === 403
+      ? " Toast Analytics (ERA) credentials required — set toast_analytics_client_id/secret on this location; standard Toast API creds don't have ERA scope."
+      : "";
+    throw new Error(`Toast dining metrics create ${range} failed with status ${res.status}.${hint} ${body}`.trim());
+  }
   const raw = await res.text();
   let guid = "";
   try {
