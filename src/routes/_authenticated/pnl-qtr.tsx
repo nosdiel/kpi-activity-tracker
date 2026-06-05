@@ -105,10 +105,7 @@ function QtrPage() {
   );
 
   useEffect(() => {
-    if (!locationId && filteredLocations[0]) setLocationId(filteredLocations[0].id);
-    if (locationId && !filteredLocations.some((l) => l.id === locationId) && filteredLocations[0]) {
-      setLocationId(filteredLocations[0].id);
-    }
+    if (!locationId && filteredLocations[0]) setLocationId("all");
   }, [filteredLocations, locationId]);
 
   const fiscalYears = useMemo(() => withFY2027(fyQ.data ?? []), [fyQ.data]);
@@ -140,30 +137,41 @@ function QtrPage() {
     [qRange.start, qRange.end],
   );
 
+  const locIds = useMemo(
+    () =>
+      locationId === "all"
+        ? filteredLocations.map((l) => l.id)
+        : locationId
+          ? [locationId]
+          : [],
+    [locationId, filteredLocations],
+  );
+  const locIdsKey = locIds.join(",");
+
   const targetsQ = useQuery({
-    queryKey: ["qtr-targets", locationId, fy, quarter],
-    enabled: !!locationId && !!fy,
+    queryKey: ["qtr-targets", locIdsKey, fy, quarter],
+    enabled: locIds.length > 0 && !!fy,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("weekly_targets")
-        .select("fiscal_week,sales_target")
-        .eq("location_id", locationId)
+        .select("location_id,fiscal_week,target_pct_over_ly")
+        .in("location_id", locIds)
         .eq("fiscal_year", fy as number)
         .gte("fiscal_week", qRange.start)
         .lte("fiscal_week", qRange.end);
       if (error) throw error;
-      return (data ?? []) as { fiscal_week: number; sales_target: number | null }[];
+      return (data ?? []) as { location_id: string; fiscal_week: number; target_pct_over_ly: number | null }[];
     },
   });
 
   const pnlQ = useQuery({
-    queryKey: ["qtr-pnl", locationId, fy, quarter],
-    enabled: !!locationId && !!fy,
+    queryKey: ["qtr-pnl", locIdsKey, fy, quarter],
+    enabled: locIds.length > 0 && !!fy,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("weekly_pnl")
         .select("fiscal_week,catering,wages,vendor_amounts")
-        .eq("location_id", locationId)
+        .in("location_id", locIds)
         .eq("fiscal_year", fy as number)
         .gte("fiscal_week", qRange.start)
         .lte("fiscal_week", qRange.end);
@@ -191,39 +199,52 @@ function QtrPage() {
   const lastWeekEnd = weekDateRanges.get(weeks[weeks.length - 1])?.[1];
 
   const salesQ = useQuery({
-    queryKey: ["qtr-sales", locationId, firstWeekStart, lastWeekEnd],
-    enabled: !!locationId && !!firstWeekStart && !!lastWeekEnd,
+    queryKey: ["qtr-sales", locIdsKey, firstWeekStart, lastWeekEnd],
+    enabled: locIds.length > 0 && !!firstWeekStart && !!lastWeekEnd,
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_sales")
-        .select("business_date,actual_sales")
-        .eq("location_id", locationId)
+        .select("location_id,business_date,actual_sales,last_year_sales")
+        .in("location_id", locIds)
         .gte("business_date", firstWeekStart as string)
         .lte("business_date", lastWeekEnd as string);
       if (error) throw error;
-      return (data ?? []) as { business_date: string; actual_sales: number | null }[];
+      return (data ?? []) as {
+        location_id: string;
+        business_date: string;
+        actual_sales: number | null;
+        last_year_sales: number | null;
+      }[];
     },
   });
 
   // Compute per-week values
   const rows = useMemo(() => {
-    const targetByWeek = new Map<number, number>();
-    (targetsQ.data ?? []).forEach((r) => targetByWeek.set(r.fiscal_week, Number(r.sales_target ?? 0)));
-    const pnlByWeek = new Map<number, { catering: number; wages: number; food: number; paper: number }>();
-    (pnlQ.data ?? []).forEach((r) =>
-      pnlByWeek.set(r.fiscal_week, {
-        catering: Number(r.catering ?? 0),
-        wages: Number(r.wages ?? 0),
-        food: sumVendor(r.vendor_amounts, "food_cost"),
-        paper: sumVendor(r.vendor_amounts, "paper_supplies"),
-      }),
+    // target pct per (location, week)
+    const pctByLocWeek = new Map<string, number>();
+    (targetsQ.data ?? []).forEach((r) =>
+      pctByLocWeek.set(`${r.location_id}:${r.fiscal_week}`, Number(r.target_pct_over_ly ?? 0) / 100),
     );
+
+    const pnlByWeek = new Map<number, { catering: number; wages: number; food: number; paper: number }>();
+    (pnlQ.data ?? []).forEach((r) => {
+      const cur = pnlByWeek.get(r.fiscal_week) ?? { catering: 0, wages: 0, food: 0, paper: 0 };
+      cur.catering += Number(r.catering ?? 0);
+      cur.wages += Number(r.wages ?? 0);
+      cur.food += sumVendor(r.vendor_amounts, "food_cost");
+      cur.paper += sumVendor(r.vendor_amounts, "paper_supplies");
+      pnlByWeek.set(r.fiscal_week, cur);
+    });
+
     const salesByWeek = new Map<number, number>();
+    const goalByWeek = new Map<number, number>();
     (salesQ.data ?? []).forEach((s) => {
-      // assign sale to its fiscal week by date lookup
       for (const [w, [start, end]] of weekDateRanges.entries()) {
         if (s.business_date >= start && s.business_date <= end) {
           salesByWeek.set(w, (salesByWeek.get(w) ?? 0) + Number(s.actual_sales ?? 0));
+          const pct = pctByLocWeek.get(`${s.location_id}:${w}`) ?? 0;
+          const ly = Number(s.last_year_sales ?? 0);
+          goalByWeek.set(w, (goalByWeek.get(w) ?? 0) + ly * (1 + pct));
           break;
         }
       }
@@ -232,7 +253,7 @@ function QtrPage() {
     return weeks.map((w) => {
       const sales = salesByWeek.get(w) ?? 0;
       const p = pnlByWeek.get(w) ?? { catering: 0, wages: 0, food: 0, paper: 0 };
-      const salesGoal = targetByWeek.get(w) ?? 0;
+      const salesGoal = goalByWeek.get(w) ?? 0;
       const vals: Record<CatKey, { goal: number; actual: number }> = {
         sales: { goal: salesGoal, actual: sales },
         payroll: { goal: 0, actual: p.wages },
@@ -276,7 +297,10 @@ function QtrPage() {
     salesQ.refetch();
   };
 
-  const locName = filteredLocations.find((l) => l.id === locationId)?.name ?? "—";
+  const locName =
+    locationId === "all"
+      ? `All locations${regionFilter === "all" ? "" : ` · ${regionFilter}`}`
+      : (filteredLocations.find((l) => l.id === locationId)?.name ?? "—");
 
 
   return (
@@ -316,6 +340,7 @@ function QtrPage() {
             <Select value={locationId} onValueChange={setLocationId}>
               <SelectTrigger><SelectValue placeholder="Pick location" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All locations</SelectItem>
                 {filteredLocations.map((l) => (
                   <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
                 ))}
