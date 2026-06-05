@@ -224,6 +224,47 @@ function QtrPage() {
   });
 
   const cateringFn = useServerFn(getCateringSales);
+  const diagFn = useServerFn(getToastCateringDiagnostics);
+  const [diagLocation, setDiagLocation] = useState<string>("");
+  const [diagWeek, setDiagWeek] = useState<number | null>(null);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagResult, setDiagResult] = useState<null | {
+    location: { id: string; name: string; restaurantGuid: string };
+    endpoint: string;
+    requestBody: unknown;
+    reportRequestGuid: string;
+    rowCount: number;
+    rows: Array<{
+      diningOption: string | null;
+      netSalesAmount: number | null;
+      grossSalesAmount: number | null;
+      businessDate: string | null;
+      restaurantGuid: string;
+      raw: string;
+    }>;
+  }>(null);
+  const handleToastDiagnostics = async () => {
+    if (!diagLocation || !diagWeek || !fyRow) {
+      toast.error("Pick a specific location and a week first");
+      return;
+    }
+    const wd = weekDates(fyRow.start_date, diagWeek);
+    if (wd.length !== 7) return;
+    setDiagLoading(true);
+    setDiagResult(null);
+    try {
+      const res = await diagFn({
+        data: { location_id: diagLocation, start_date: wd[0], end_date: wd[6] },
+      });
+      setDiagResult(res);
+      toast.success(`Toast returned ${res.rowCount} rows`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDiagLoading(false);
+    }
+  };
+
   const cateringQ = useQuery({
     queryKey: ["qtr-catering", locIdsKey, firstWeekStart, lastWeekEnd],
     enabled: false,
