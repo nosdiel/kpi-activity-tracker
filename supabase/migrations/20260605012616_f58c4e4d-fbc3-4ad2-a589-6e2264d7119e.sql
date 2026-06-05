@@ -1,0 +1,1 @@
+ALTER TABLE public.daily_sales ADD COLUMN IF NOT EXISTS focus_item_qty integer;

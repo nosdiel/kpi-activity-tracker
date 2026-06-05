@@ -21,6 +21,7 @@ export type Database = {
           business_date: string
           created_at: string
           dessert_count: number | null
+          focus_item_qty: number | null
           id: string
           last_year_customer_count: number | null
           last_year_sales: number | null
@@ -35,6 +36,7 @@ export type Database = {
           business_date: string
           created_at?: string
           dessert_count?: number | null
+          focus_item_qty?: number | null
           id?: string
           last_year_customer_count?: number | null
           last_year_sales?: number | null
@@ -49,6 +51,7 @@ export type Database = {
           business_date?: string
           created_at?: string
           dessert_count?: number | null
+          focus_item_qty?: number | null
           id?: string
           last_year_customer_count?: number | null
           last_year_sales?: number | null
