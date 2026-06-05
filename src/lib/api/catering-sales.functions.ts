@@ -284,6 +284,19 @@ function diningRowsToCatering(rows: ToastDiningMetricsRow[], locationId: string,
   return [...centsByDate.entries()].map(([business_date, cents]) => ({ location_id: locationId, business_date, amount: cents / 100 }));
 }
 
+function cateringBreakdownCents(rows: ToastDiningMetricsRow[], startDate: string, endDate: string): Array<{ business_date: string; amount_cents: number }> {
+  const centsByDate = new Map(isoRangeDates(startDate, endDate).map((d) => [d, 0]));
+  for (const row of rows) {
+    if (diningOptionLabel(row).trim().toLowerCase() !== "catering") continue;
+    const businessDate = isoFromToastBusinessDate(row.businessDate ?? row.date);
+    if (!centsByDate.has(businessDate)) continue;
+    const net = Number(row.netSalesAmount ?? 0);
+    if (!Number.isFinite(net)) continue;
+    centsByDate.set(businessDate, (centsByDate.get(businessDate) ?? 0) + Math.round(net * 100));
+  }
+  return [...centsByDate.entries()].map(([business_date, amount_cents]) => ({ business_date, amount_cents }));
+}
+
 async function saveWeeklyCateringActuals(
   supabaseAdmin: any,
   locationId: string,
