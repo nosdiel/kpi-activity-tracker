@@ -265,13 +265,13 @@ function MarketingMatrixPage() {
             <CardContent style={{ height: 320 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                  <XAxis dataKey="date" stroke="hsl(var(--muted-foreground))" fontSize={12} />
-                  <YAxis stroke="hsl(var(--muted-foreground))" fontSize={12} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={12} />
+                  <YAxis stroke="var(--muted-foreground)" fontSize={12} />
                   <Tooltip />
                   <Legend />
-                  <Bar dataKey="prior" name="Last year" fill="hsl(var(--chart-2))" />
-                  <Bar dataKey="current" name="Campaign" fill="hsl(var(--chart-1))" />
+                  <Bar dataKey="prior" name="Last year" fill="var(--color-chart-2)" />
+                  <Bar dataKey="current" name="Campaign" fill="var(--color-chart-1)" />
                 </BarChart>
               </ResponsiveContainer>
             </CardContent>
