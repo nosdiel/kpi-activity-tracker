@@ -541,6 +541,13 @@ export const getCateringSales = createServerFn({ method: "POST" })
           locErrors.push({ location_id: loc.id, message: (e as Error).message });
         }
       }
+      if (locResults.length > 0 && data.fiscal_year && requestedWeeks.some((w) => w.fiscal_week)) {
+        try {
+          await saveWeeklyCateringActuals(supabaseAdmin, loc.id, data.fiscal_year, requestedWeeks, locResults);
+        } catch (e) {
+          locErrors.push({ location_id: loc.id, message: `Unable to save catering actuals: ${(e as Error).message}` });
+        }
+      }
       perLocation.push({ results: locResults, errors: locErrors });
       await new Promise((r) => setTimeout(r, 400));
     }
