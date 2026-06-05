@@ -267,7 +267,7 @@ function QtrPage() {
 
   const cateringQ = useQuery({
     queryKey: ["qtr-catering", locIdsKey, firstWeekStart, lastWeekEnd],
-    enabled: false,
+    enabled: locIds.length > 0 && !!firstWeekStart && !!lastWeekEnd && !!fy,
     queryFn: async () => {
       const res = await cateringFn({
         data: {
