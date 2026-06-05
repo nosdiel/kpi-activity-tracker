@@ -10,13 +10,13 @@ runConfig:
 
 env:
   - variable: SUPABASE_URL
-    value: "https://rktoodsrharkqbpkqoil.supabase.co"
+    value: "https://gcplpjgpwxwezuohnkly.supabase.co"
     availability:
       - BUILD
       - RUNTIME
 
   - variable: VITE_SUPABASE_URL
-    value: "https://rktoodsrharkqbpkqoil.supabase.co"
+    value: "https://gcplpjgpwxwezuohnkly.supabase.co"
     availability:
       - BUILD
       - RUNTIME
