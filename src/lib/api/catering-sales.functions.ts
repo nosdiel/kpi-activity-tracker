@@ -606,6 +606,7 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
       restaurantGuid: loc.toast_restaurant_guid,
       raw: JSON.stringify(r),
     }));
+    const cateringBreakdown = cateringBreakdownCents(rows, data.start_date, data.end_date);
 
     return {
       location: { id: loc.id, name: loc.name, restaurantGuid: loc.toast_restaurant_guid },
@@ -613,6 +614,8 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
       requestBody,
       reportRequestGuid: guid,
       rowCount: rows.length,
+      cateringNetTotalCents: cateringBreakdown.reduce((sum, d) => sum + d.amount_cents, 0),
+      cateringBreakdown,
       rows: normalized,
     };
   });
