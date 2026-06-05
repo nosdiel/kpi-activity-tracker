@@ -393,8 +393,26 @@ void toastAccessToken;
 void toastDayTotal;
 
 const toastBaseLocationColumns =
-  "id,name,toast_restaurant_guid,toast_client_id,toast_client_secret";
+  "id,name,toast_restaurant_guid,toast_client_id,toast_client_secret,toast_analytics_client_id,toast_analytics_client_secret";
 const toastExtendedLocationColumns = `${toastBaseLocationColumns},toast_api_url,toast_credential_name`;
+
+// Pick the right Toast credential pair, with fallback to the other if only one is set.
+// - "standard"  → Orders/Menu/Config API (toast_client_id/secret)
+// - "analytics" → Analytics era/v1 endpoints (toast_analytics_client_id/secret)
+function pickToastCreds(loc: any, kind: "standard" | "analytics"): { clientId: string; clientSecret: string } {
+  const std = { clientId: loc?.toast_client_id as string | null, clientSecret: loc?.toast_client_secret as string | null };
+  const ana = {
+    clientId: loc?.toast_analytics_client_id as string | null,
+    clientSecret: loc?.toast_analytics_client_secret as string | null,
+  };
+  const primary = kind === "analytics" ? ana : std;
+  const fallback = kind === "analytics" ? std : ana;
+  const chosen = primary.clientId && primary.clientSecret ? primary : fallback;
+  if (!chosen.clientId || !chosen.clientSecret) {
+    throw new Error(`Toast ${kind} credentials are not configured for this location`);
+  }
+  return { clientId: chosen.clientId, clientSecret: chosen.clientSecret };
+}
 
 function isMissingToastMetadataColumn(error: { message?: string; code?: string; details?: string } | null | undefined) {
   if (!error) return false;
@@ -460,7 +478,8 @@ export const syncToast = createServerFn({ method: "POST" })
       };
       try {
         const base = ((loc as any).toast_api_url || TOAST_BASE).replace(/\/+$/, "");
-        const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+        const __anaCreds = pickToastCreds(loc, 'analytics');
+        const token = await toastAccessTokenWithBase(base, __anaCreds.clientId, __anaCreds.clientSecret);
         const { totalCents, customerCount } = await toastDayTotalWithBase(base, token, loc.toast_restaurant_guid, businessDate);
         r.total_cents = totalCents;
         r.customer_count = customerCount;
@@ -738,10 +757,11 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
       if (source === "toast") {
         toastBase = (((loc as any).toast_api_url || TOAST_BASE) as string).replace(/\/+$/, "");
         try {
+          const __anaCreds = pickToastCreds(loc, 'analytics');
           toastToken = await toastAccessTokenWithBase(
             toastBase,
-            loc.toast_client_id,
-            loc.toast_client_secret
+            __anaCreds.clientId,
+            __anaCreds.clientSecret
           );
         } catch (e) {
           errors.push({
@@ -1024,7 +1044,7 @@ async function fetchToastMenuItemsForDayInline(
 
 async function loadToastLocation(supabaseAdmin: any, locationId: string) {
   const baseColumns =
-    "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret";
+    "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret,toast_analytics_client_id,toast_analytics_client_secret";
   const extendedColumns = `${baseColumns},toast_api_url`;
   let r = await supabaseAdmin.from("locations").select(extendedColumns).eq("id", locationId).maybeSingle();
   if (r.error && isMissingToastMetadataColumn(r.error)) {
@@ -1082,7 +1102,8 @@ export const startToastMenuReportJob = createServerFn({ method: "POST" })
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
     let token: string;
     try {
-      token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+      const __anaCreds = pickToastCreds(loc, 'analytics');
+      token = await toastAccessTokenWithBase(base, __anaCreds.clientId, __anaCreds.clientSecret);
     } catch (e) {
       return { ok: false as const, error: (e as Error).message };
     }
@@ -1182,7 +1203,8 @@ export const pollToastMenuReportJob = createServerFn({ method: "POST" })
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
     let token: string;
     try {
-      token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+      const __anaCreds = pickToastCreds(loc, 'analytics');
+      token = await toastAccessTokenWithBase(base, __anaCreds.clientId, __anaCreds.clientSecret);
     } catch (e) {
       return { status: "failed" as const, error: (e as Error).message, items: [] as MenuItem[] };
     }
@@ -1266,7 +1288,8 @@ export const listPosMenuItems = createServerFn({ method: "POST" })
     // Toast: fetch the latest completed business day inline with a strict budget.
     const base = loc.toast_api_url || "https://ws-api.toasttab.com";
     try {
-      const accessToken = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+      const __anaCreds = pickToastCreds(loc, 'analytics');
+      const accessToken = await toastAccessTokenWithBase(base, __anaCreds.clientId, __anaCreds.clientSecret);
       const today = new Date();
       const compactDates: number[] = [];
       for (let i = 1; i <= 3; i++) {
@@ -1347,7 +1370,8 @@ export const getTrackableItemDailyQuantity = createServerFn({ method: "POST" })
 
     try {
       const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
-      const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+      const __anaCreds = pickToastCreds(loc, 'analytics');
+      const token = await toastAccessTokenWithBase(base, __anaCreds.clientId, __anaCreds.clientSecret);
 
       const results = await Promise.allSettled(
         data.dates.map(async (iso) => {
