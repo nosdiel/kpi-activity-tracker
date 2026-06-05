@@ -478,7 +478,8 @@ export const syncToast = createServerFn({ method: "POST" })
       };
       try {
         const base = ((loc as any).toast_api_url || TOAST_BASE).replace(/\/+$/, "");
-        const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+        const __anaCreds = pickToastCreds(loc, 'analytics');
+        const token = await toastAccessTokenWithBase(base, __anaCreds.clientId, __anaCreds.clientSecret);
         const { totalCents, customerCount } = await toastDayTotalWithBase(base, token, loc.toast_restaurant_guid, businessDate);
         r.total_cents = totalCents;
         r.customer_count = customerCount;
@@ -756,10 +757,11 @@ export const backfillSalesRange = createServerFn({ method: "POST" })
       if (source === "toast") {
         toastBase = (((loc as any).toast_api_url || TOAST_BASE) as string).replace(/\/+$/, "");
         try {
+          const __anaCreds = pickToastCreds(loc, 'analytics');
           toastToken = await toastAccessTokenWithBase(
             toastBase,
-            loc.toast_client_id,
-            loc.toast_client_secret
+            __anaCreds.clientId,
+            __anaCreds.clientSecret
           );
         } catch (e) {
           errors.push({
@@ -1100,7 +1102,8 @@ export const startToastMenuReportJob = createServerFn({ method: "POST" })
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
     let token: string;
     try {
-      token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+      const __anaCreds = pickToastCreds(loc, 'analytics');
+      token = await toastAccessTokenWithBase(base, __anaCreds.clientId, __anaCreds.clientSecret);
     } catch (e) {
       return { ok: false as const, error: (e as Error).message };
     }
@@ -1200,7 +1203,8 @@ export const pollToastMenuReportJob = createServerFn({ method: "POST" })
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
     let token: string;
     try {
-      token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+      const __anaCreds = pickToastCreds(loc, 'analytics');
+      token = await toastAccessTokenWithBase(base, __anaCreds.clientId, __anaCreds.clientSecret);
     } catch (e) {
       return { status: "failed" as const, error: (e as Error).message, items: [] as MenuItem[] };
     }
@@ -1284,7 +1288,8 @@ export const listPosMenuItems = createServerFn({ method: "POST" })
     // Toast: fetch the latest completed business day inline with a strict budget.
     const base = loc.toast_api_url || "https://ws-api.toasttab.com";
     try {
-      const accessToken = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+      const __anaCreds = pickToastCreds(loc, 'analytics');
+      const accessToken = await toastAccessTokenWithBase(base, __anaCreds.clientId, __anaCreds.clientSecret);
       const today = new Date();
       const compactDates: number[] = [];
       for (let i = 1; i <= 3; i++) {
@@ -1365,7 +1370,8 @@ export const getTrackableItemDailyQuantity = createServerFn({ method: "POST" })
 
     try {
       const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
-      const token = await toastAccessTokenWithBase(base, loc.toast_client_id, loc.toast_client_secret);
+      const __anaCreds = pickToastCreds(loc, 'analytics');
+      const token = await toastAccessTokenWithBase(base, __anaCreds.clientId, __anaCreds.clientSecret);
 
       const results = await Promise.allSettled(
         data.dates.map(async (iso) => {
