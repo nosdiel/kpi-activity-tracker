@@ -136,27 +136,22 @@ async function createToastDiningMetricsReport(
   endDate: string
 ): Promise<string> {
   const range = toastMetricsRange(startDate, endDate);
-  let res: Response | null = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    res = await fetchWithTimeout(
-      `${base}/era/v1/metrics/${range}`,
-      {
-        method: "POST",
-        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          startBusinessDate: compactBusinessDate(startDate),
-          endBusinessDate: compactBusinessDate(endDate),
-          restaurantIds: [restaurantGuid],
-          excludedRestaurantIds: [],
-          groupBy: ["DINING_OPTION"],
-        }),
-      },
-      8_000
-    );
-    if (res.status !== 429) break;
-    await new Promise((r) => setTimeout(r, 1_500 * (attempt + 1)));
-  }
-  if (!res) throw new Error("Toast dining metrics request did not run");
+  const res = await fetchWithTimeout(
+    `${base}/era/v1/metrics/${range}`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        startBusinessDate: compactBusinessDate(startDate),
+        endBusinessDate: compactBusinessDate(endDate),
+        restaurantIds: [restaurantGuid],
+        excludedRestaurantIds: [],
+        groupBy: ["DINING_OPTION"],
+      }),
+    },
+    8_000
+  );
+  if (res.status === 429) throw new ToastRateLimitError();
   if (!res.ok) throw new Error(readableToastError(`Toast dining metrics create ${range}`, res.status));
   const raw = await res.text();
   let guid = "";
@@ -178,6 +173,7 @@ async function fetchToastDiningMetricsReport(base: string, accessToken: string, 
       headers: { Authorization: `Bearer ${accessToken}` },
     }, 8_000);
     lastStatus = res.status;
+    if (res.status === 429) throw new ToastRateLimitError();
     if (res.status === 200) {
       const body = await res.json();
       if (Array.isArray(body)) return body as ToastDiningMetricsRow[];
@@ -192,16 +188,58 @@ async function fetchToastDiningMetricsReport(base: string, accessToken: string, 
   throw new Error(`Toast dining metrics: report not ready in time (last status ${lastStatus})`);
 }
 
-async function toastCateringRangeByDiningOption(
-  base: string,
-  accessToken: string,
-  restaurantGuid: string,
+// Cache TTL — reuse a successful Toast dining-metrics report for this long.
+const TOAST_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
+
+function diningReportType(startDate: string, endDate: string): string {
+  return `dining_metrics:${startDate}:${endDate}`;
+}
+
+async function readCachedDiningRows(
+  supabaseAdmin: any,
   locationId: string,
   startDate: string,
   endDate: string
-): Promise<CateringDay[]> {
-  const guid = await createToastDiningMetricsReport(base, accessToken, restaurantGuid, startDate, endDate);
-  const rows = await fetchToastDiningMetricsReport(base, accessToken, guid);
+): Promise<{ rows: ToastDiningMetricsRow[]; reportRequestGuid: string | null } | null> {
+  const { data } = await supabaseAdmin
+    .from("toast_report_jobs")
+    .select("rows, report_request_guid, status, updated_at")
+    .eq("location_id", locationId)
+    .eq("business_date", startDate)
+    .eq("report_type", diningReportType(startDate, endDate))
+    .maybeSingle();
+  if (!data || data.status !== "ready" || !Array.isArray(data.rows)) return null;
+  const ageMs = Date.now() - new Date(data.updated_at as string).getTime();
+  if (ageMs > TOAST_CACHE_TTL_MS) return null;
+  return { rows: data.rows as ToastDiningMetricsRow[], reportRequestGuid: (data.report_request_guid as string | null) ?? null };
+}
+
+async function writeCachedDiningRows(
+  supabaseAdmin: any,
+  locationId: string,
+  startDate: string,
+  endDate: string,
+  reportRequestGuid: string,
+  rows: ToastDiningMetricsRow[]
+): Promise<void> {
+  await supabaseAdmin
+    .from("toast_report_jobs")
+    .upsert(
+      {
+        location_id: locationId,
+        business_date: startDate,
+        report_type: diningReportType(startDate, endDate),
+        report_request_guid: reportRequestGuid,
+        status: "ready",
+        rows,
+        error: null,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "location_id,business_date,report_type" }
+    );
+}
+
+function diningRowsToCatering(rows: ToastDiningMetricsRow[], locationId: string): CateringDay[] {
   const byDate = new Map<string, number>();
   for (const row of rows) {
     if (!/catering/i.test(row.diningOption ?? "")) continue;
@@ -213,6 +251,28 @@ async function toastCateringRangeByDiningOption(
   }
   return [...byDate.entries()].map(([business_date, amount]) => ({ location_id: locationId, business_date, amount }));
 }
+
+async function toastCateringRangeByDiningOption(
+  supabaseAdmin: any,
+  base: string,
+  accessToken: string,
+  restaurantGuid: string,
+  locationId: string,
+  startDate: string,
+  endDate: string
+): Promise<CateringDay[]> {
+  const cached = await readCachedDiningRows(supabaseAdmin, locationId, startDate, endDate);
+  if (cached) return diningRowsToCatering(cached.rows, locationId);
+
+  // Serialize create-report calls; Toast 429s on bursty creates.
+  const guid = await queueToastCreate(() =>
+    createToastDiningMetricsReport(base, accessToken, restaurantGuid, startDate, endDate)
+  );
+  const rows = await fetchToastDiningMetricsReport(base, accessToken, guid);
+  await writeCachedDiningRows(supabaseAdmin, locationId, startDate, endDate, guid, rows).catch(() => undefined);
+  return diningRowsToCatering(rows, locationId);
+}
+
 
 async function toastCateringDay(base: string, accessToken: string, restaurantGuid: string, businessDate: string, cateringGuids: Set<string>): Promise<number> {
   if (cateringGuids.size === 0) return 0;
