@@ -301,7 +301,7 @@ function QtrPage() {
         sales: { goal: goalByWeek.get(w) ?? 0, actual: sales },
         payroll: { goal: payrollGoalByWeek.get(w) ?? 0, actual: p.wages },
         food_cost: { goal: foodGoalByWeek.get(w) ?? 0, actual: p.food },
-        catering: { goal: 0, actual: cateringByWeek.get(w) ?? 0 },
+        catering: { goal: 0, actual: cateringByWeek.get(w) ?? p.catering },
         paper_good: { goal: paperGoalByWeek.get(w) ?? 0, actual: p.paper },
       };
       return { week: w, vals };
@@ -336,6 +336,7 @@ function QtrPage() {
   const isRefreshing = targetsQ.isFetching || pnlQ.isFetching || salesQ.isFetching || cateringQ.isFetching;
   const cateringErrorCount = cateringQ.data?.errors?.length ?? 0;
   const cateringLoadedCount = cateringQ.data?.results?.length ?? 0;
+  const savedCateringTotal = totals.catering.actual;
 
   const handleRefresh = () => {
     targetsQ.refetch();
@@ -378,7 +379,7 @@ function QtrPage() {
             {cateringQ.isFetching
               ? "Loading catering sales from POS…"
               : cateringErrorCount > 0
-                ? `Toast did not return catering sales for ${cateringErrorCount} location${cateringErrorCount === 1 ? "" : "s"}. ${cateringQ.data?.errors?.[0]?.message ?? "Try refresh again shortly."}`
+                ? `Toast did not return catering sales for ${cateringErrorCount} location${cateringErrorCount === 1 ? "" : "s"}; showing saved weekly catering total ${money(savedCateringTotal)}. ${cateringQ.data?.errors?.[0]?.message ?? "Try refresh again shortly."}`
                 : `Loaded catering sales for ${cateringLoadedCount} day${cateringLoadedCount === 1 ? "" : "s"}.`}
           </AlertDescription>
         </Alert>
