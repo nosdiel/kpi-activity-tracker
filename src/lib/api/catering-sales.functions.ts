@@ -188,7 +188,7 @@ async function fetchToastDiningMetricsReport(base: string, accessToken: string, 
   while (Date.now() < deadline) {
     const res = await fetchWithTimeout(`${base}/era/v1/metrics/${reportGuid}`, {
       headers: { Authorization: `Bearer ${accessToken}` },
-    }, 8_000);
+    }, 20_000);
     lastStatus = res.status;
     if (res.status === 429) throw new ToastRateLimitError();
     if (res.status === 200) {
