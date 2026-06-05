@@ -311,10 +311,14 @@ export const getCateringSales = createServerFn({ method: "POST" })
               ))
             );
           } catch (metricsError) {
-            const cateringGuids = await toastCateringDiningOptionGuids(base, token, loc.toast_restaurant_guid);
-            for (const d of dates) {
-              const amt = await toastCateringDay(base, token, loc.toast_restaurant_guid, d, cateringGuids);
-              if (amt > 0) locResults.push({ location_id: loc.id, business_date: d, amount: amt });
+            try {
+              const cateringGuids = await toastCateringDiningOptionGuids(base, token, loc.toast_restaurant_guid);
+              for (const d of dates) {
+                const amt = await toastCateringDay(base, token, loc.toast_restaurant_guid, d, cateringGuids);
+                if (amt > 0) locResults.push({ location_id: loc.id, business_date: d, amount: amt });
+              }
+            } catch {
+              throw metricsError;
             }
             if (locResults.length === 0) throw metricsError;
           }
