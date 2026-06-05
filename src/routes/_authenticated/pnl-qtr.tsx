@@ -283,6 +283,16 @@ function QtrPage() {
       }
     });
 
+    const cateringByWeek = new Map<number, number>();
+    (cateringQ.data?.results ?? []).forEach((c) => {
+      for (const [w, [start, end]] of weekDateRanges.entries()) {
+        if (c.business_date >= start && c.business_date <= end) {
+          cateringByWeek.set(w, (cateringByWeek.get(w) ?? 0) + Number(c.amount ?? 0));
+          break;
+        }
+      }
+    });
+
     return weeks.map((w) => {
       const sales = salesByWeek.get(w) ?? 0;
       const p = pnlByWeek.get(w) ?? { catering: 0, wages: 0, food: 0, paper: 0 };
@@ -290,12 +300,12 @@ function QtrPage() {
         sales: { goal: goalByWeek.get(w) ?? 0, actual: sales },
         payroll: { goal: payrollGoalByWeek.get(w) ?? 0, actual: p.wages },
         food_cost: { goal: foodGoalByWeek.get(w) ?? 0, actual: p.food },
-        catering: { goal: 0, actual: p.catering },
+        catering: { goal: 0, actual: cateringByWeek.get(w) ?? 0 },
         paper_good: { goal: paperGoalByWeek.get(w) ?? 0, actual: p.paper },
       };
       return { week: w, vals };
     });
-  }, [targetsQ.data, pnlQ.data, salesQ.data, locationsQ.data, weeks, weekDateRanges]);
+  }, [targetsQ.data, pnlQ.data, salesQ.data, locationsQ.data, cateringQ.data, weeks, weekDateRanges]);
 
   // Totals
   const totals = useMemo(() => {
