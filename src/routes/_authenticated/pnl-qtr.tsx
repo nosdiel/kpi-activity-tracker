@@ -224,7 +224,7 @@ function QtrPage() {
   const cateringFn = useServerFn(getCateringSales);
   const cateringQ = useQuery({
     queryKey: ["qtr-catering", locIdsKey, firstWeekStart, lastWeekEnd],
-    enabled: locIds.length > 0 && !!firstWeekStart && !!lastWeekEnd,
+    enabled: false,
     queryFn: async () => {
       const res = await cateringFn({
         data: {
@@ -379,7 +379,7 @@ function QtrPage() {
             {cateringQ.isFetching
               ? "Loading catering sales from POS…"
               : cateringErrorCount > 0
-                ? `Toast did not return catering sales for ${cateringErrorCount} location${cateringErrorCount === 1 ? "" : "s"}; showing saved weekly catering total ${money(savedCateringTotal)}. ${cateringQ.data?.errors?.[0]?.message ?? "Try refresh again shortly."}`
+                ? `Toast is temporarily rate-limiting live catering sales for ${cateringErrorCount} location${cateringErrorCount === 1 ? "" : "s"}. Showing saved weekly catering total ${money(savedCateringTotal)}. Please wait 5–10 minutes, then click Refresh again.`
                 : `Loaded catering sales for ${cateringLoadedCount} day${cateringLoadedCount === 1 ? "" : "s"}.`}
           </AlertDescription>
         </Alert>
