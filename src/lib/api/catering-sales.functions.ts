@@ -269,17 +269,19 @@ async function writeCachedDiningRows(
 }
 
 function diningRowsToCatering(rows: ToastDiningMetricsRow[], locationId: string, fallbackBusinessDate?: string): CateringDay[] {
-  const byDate = new Map<string, number>();
+  const centsByDate = new Map<string, number>();
   for (const row of rows) {
-    const diningOption = diningOptionLabel(row);
-    if (!/catering/i.test(diningOption)) continue;
+    const diningOption = diningOptionLabel(row).trim().toLowerCase();
+    // ERA returns DINING_OPTION = "Catering" directly; match exactly, not substring.
+    if (diningOption !== "catering") continue;
     const businessDate = isoFromToastBusinessDate(row.businessDate ?? row.date) || fallbackBusinessDate || "";
     if (!businessDate) continue;
-    const amount = Number(row.netSalesAmount ?? row.grossSalesAmount ?? row.sales ?? 0);
-    if (!Number.isFinite(amount) || amount <= 0) continue;
-    byDate.set(businessDate, (byDate.get(businessDate) ?? 0) + amount);
+    const net = Number(row.netSalesAmount ?? row.grossSalesAmount ?? row.sales ?? 0);
+    if (!Number.isFinite(net) || net <= 0) continue;
+    const cents = Math.round(net * 100);
+    centsByDate.set(businessDate, (centsByDate.get(businessDate) ?? 0) + cents);
   }
-  return [...byDate.entries()].map(([business_date, amount]) => ({ location_id: locationId, business_date, amount }));
+  return [...centsByDate.entries()].map(([business_date, cents]) => ({ location_id: locationId, business_date, amount: cents / 100 }));
 }
 
 function diningOptionLabel(row: ToastDiningMetricsRow): string {
