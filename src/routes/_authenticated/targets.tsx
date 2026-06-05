@@ -8,7 +8,21 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { quarterWeekRange, weekDates } from "@/lib/fiscal";
+import { quarterWeekRange, weekDates, shiftISODate } from "@/lib/fiscal";
+
+const withFY2027 = (rows: { fiscal_year: number; start_date: string }[] = []) => {
+  const map = new Map(rows.map((r) => [r.fiscal_year, r.start_date]));
+  if (!map.has(2027)) {
+    const fy2026 = map.get(2026);
+    map.set(2027, fy2026 ? shiftISODate(fy2026, 364) : "2026-12-27");
+  }
+  for (let y = 2026; y >= 2020; y--) {
+    if (!map.has(y)) map.set(y, shiftISODate(map.get(y + 1)!, -364));
+  }
+  return Array.from(map.entries())
+    .map(([fiscal_year, start_date]) => ({ fiscal_year, start_date }))
+    .sort((a, b) => b.fiscal_year - a.fiscal_year);
+};
 
 export const Route = createFileRoute("/_authenticated/targets")({
   head: () => ({ meta: [{ title: "Weekly Targets — NiNi KPI" }] }),
