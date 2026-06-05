@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/pnl-qtr")({
   component: QtrPage,
 });
 
-type Location = { id: string; name: string; region: string | null; payroll_pct_of_sales: number | null };
+type Location = { id: string; name: string; region: string | null; payroll_pct_of_sales: number | null; food_cost_pct_of_sales: number | null; paper_goods_pct_of_sales: number | null };
 type FY = { fiscal_year: number; start_date: string };
 type VendorLine = { name: string; amount: number };
 type VendorAmountsBlob = { food_cost?: VendorLine[]; paper_supplies?: VendorLine[] };
