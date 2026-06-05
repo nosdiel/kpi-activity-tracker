@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/pnl-qtr")({
   component: QtrPage,
 });
 
-type Location = { id: string; name: string; region: string | null; payroll_pct_of_sales: number | null };
+type Location = { id: string; name: string; region: string | null; payroll_pct_of_sales: number | null; food_cost_pct_of_sales: number | null; paper_goods_pct_of_sales: number | null };
 type FY = { fiscal_year: number; start_date: string };
 type VendorLine = { name: string; amount: number };
 type VendorAmountsBlob = { food_cost?: VendorLine[]; paper_supplies?: VendorLine[] };
@@ -68,7 +68,7 @@ function QtrPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("locations")
-        .select("id,name,region,payroll_pct_of_sales")
+        .select("id,name,region,payroll_pct_of_sales,food_cost_pct_of_sales,paper_goods_pct_of_sales")
         .eq("active", true)
         .order("name");
       if (error) throw error;
@@ -225,9 +225,13 @@ function QtrPage() {
       pctByLocWeek.set(`${r.location_id}:${r.fiscal_week}`, Number(r.target_pct_over_ly ?? 0) / 100),
     );
     const payrollPctByLoc = new Map<string, number>();
-    (locationsQ.data ?? []).forEach((l) =>
-      payrollPctByLoc.set(l.id, Number(l.payroll_pct_of_sales ?? 0) / 100),
-    );
+    const foodPctByLoc = new Map<string, number>();
+    const paperPctByLoc = new Map<string, number>();
+    (locationsQ.data ?? []).forEach((l) => {
+      payrollPctByLoc.set(l.id, Number(l.payroll_pct_of_sales ?? 0) / 100);
+      foodPctByLoc.set(l.id, Number(l.food_cost_pct_of_sales ?? 0) / 100);
+      paperPctByLoc.set(l.id, Number(l.paper_goods_pct_of_sales ?? 0) / 100);
+    });
 
     const pnlByWeek = new Map<number, { catering: number; wages: number; food: number; paper: number }>();
     (pnlQ.data ?? []).forEach((r) => {
@@ -242,6 +246,8 @@ function QtrPage() {
     const salesByWeek = new Map<number, number>();
     const goalByWeek = new Map<number, number>();
     const payrollGoalByWeek = new Map<number, number>();
+    const foodGoalByWeek = new Map<number, number>();
+    const paperGoalByWeek = new Map<number, number>();
     (salesQ.data ?? []).forEach((s) => {
       for (const [w, [start, end]] of weekDateRanges.entries()) {
         if (s.business_date >= start && s.business_date <= end) {
@@ -250,8 +256,9 @@ function QtrPage() {
           const pct = pctByLocWeek.get(`${s.location_id}:${w}`) ?? 0;
           const ly = Number(s.last_year_sales ?? 0);
           goalByWeek.set(w, (goalByWeek.get(w) ?? 0) + ly * (1 + pct));
-          const ppct = payrollPctByLoc.get(s.location_id) ?? 0;
-          payrollGoalByWeek.set(w, (payrollGoalByWeek.get(w) ?? 0) + actual * ppct);
+          payrollGoalByWeek.set(w, (payrollGoalByWeek.get(w) ?? 0) + actual * (payrollPctByLoc.get(s.location_id) ?? 0));
+          foodGoalByWeek.set(w, (foodGoalByWeek.get(w) ?? 0) + actual * (foodPctByLoc.get(s.location_id) ?? 0));
+          paperGoalByWeek.set(w, (paperGoalByWeek.get(w) ?? 0) + actual * (paperPctByLoc.get(s.location_id) ?? 0));
           break;
         }
       }
@@ -260,14 +267,12 @@ function QtrPage() {
     return weeks.map((w) => {
       const sales = salesByWeek.get(w) ?? 0;
       const p = pnlByWeek.get(w) ?? { catering: 0, wages: 0, food: 0, paper: 0 };
-      const salesGoal = goalByWeek.get(w) ?? 0;
-      const payrollGoal = payrollGoalByWeek.get(w) ?? 0;
       const vals: Record<CatKey, { goal: number; actual: number }> = {
-        sales: { goal: salesGoal, actual: sales },
-        payroll: { goal: payrollGoal, actual: p.wages },
-        food_cost: { goal: 0, actual: p.food },
+        sales: { goal: goalByWeek.get(w) ?? 0, actual: sales },
+        payroll: { goal: payrollGoalByWeek.get(w) ?? 0, actual: p.wages },
+        food_cost: { goal: foodGoalByWeek.get(w) ?? 0, actual: p.food },
         catering: { goal: 0, actual: p.catering },
-        paper_good: { goal: 0, actual: p.paper },
+        paper_good: { goal: paperGoalByWeek.get(w) ?? 0, actual: p.paper },
       };
       return { week: w, vals };
     });

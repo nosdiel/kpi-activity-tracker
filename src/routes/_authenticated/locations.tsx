@@ -30,6 +30,8 @@ type LocationRow = {
   address: string | null;
   active: boolean | null;
   payroll_pct_of_sales: number | null;
+  food_cost_pct_of_sales: number | null;
+  paper_goods_pct_of_sales: number | null;
 };
 
 type FormState = {
@@ -40,6 +42,8 @@ type FormState = {
   address: string;
   active: boolean;
   payroll_pct_of_sales: string;
+  food_cost_pct_of_sales: string;
+  paper_goods_pct_of_sales: string;
 };
 
 const emptyForm: FormState = {
@@ -49,6 +53,8 @@ const emptyForm: FormState = {
   address: "",
   active: true,
   payroll_pct_of_sales: "",
+  food_cost_pct_of_sales: "",
+  paper_goods_pct_of_sales: "",
 };
 
 function LocationsPage() {
@@ -76,14 +82,21 @@ function LocationsPage() {
 
   const saveMut = useMutation({
     mutationFn: async (f: FormState) => {
-      const pctNum = f.payroll_pct_of_sales.trim() === "" ? null : Number(f.payroll_pct_of_sales);
+      const toNum = (s: string) => {
+        const t = s.trim();
+        if (t === "") return null;
+        const n = Number(t);
+        return Number.isFinite(n) ? n : null;
+      };
       const payload = {
         name: f.name.trim(),
         region: f.region.trim() || null,
         timezone: f.timezone.trim() || null,
         address: f.address.trim() || null,
         active: f.active,
-        payroll_pct_of_sales: pctNum !== null && Number.isFinite(pctNum) ? pctNum : null,
+        payroll_pct_of_sales: toNum(f.payroll_pct_of_sales),
+        food_cost_pct_of_sales: toNum(f.food_cost_pct_of_sales),
+        paper_goods_pct_of_sales: toNum(f.paper_goods_pct_of_sales),
       };
       if (f.id) {
         const { error } = await supabase.from("locations").update(payload).eq("id", f.id);
@@ -112,6 +125,8 @@ function LocationsPage() {
       address: row.address ?? "",
       active: row.active ?? true,
       payroll_pct_of_sales: row.payroll_pct_of_sales == null ? "" : String(row.payroll_pct_of_sales),
+      food_cost_pct_of_sales: row.food_cost_pct_of_sales == null ? "" : String(row.food_cost_pct_of_sales),
+      paper_goods_pct_of_sales: row.paper_goods_pct_of_sales == null ? "" : String(row.paper_goods_pct_of_sales),
     });
     setOpen(true);
   };
@@ -218,19 +233,33 @@ function LocationsPage() {
                 <Input value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Payroll Goal (% of Sales)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                placeholder="e.g. 28.5"
-                value={form.payroll_pct_of_sales}
-                onChange={(e) => setForm({ ...form, payroll_pct_of_sales: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">Used in QTR Report to compute Payroll goal = % × Actual Sales.</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label>Payroll Goal (% of Sales)</Label>
+                <Input
+                  type="number" step="0.01" min="0" max="100" placeholder="e.g. 28.5"
+                  value={form.payroll_pct_of_sales}
+                  onChange={(e) => setForm({ ...form, payroll_pct_of_sales: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Food Cost Goal (% of Sales)</Label>
+                <Input
+                  type="number" step="0.01" min="0" max="100" placeholder="e.g. 30"
+                  value={form.food_cost_pct_of_sales}
+                  onChange={(e) => setForm({ ...form, food_cost_pct_of_sales: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Paper Goods Goal (% of Sales)</Label>
+                <Input
+                  type="number" step="0.01" min="0" max="100" placeholder="e.g. 3"
+                  value={form.paper_goods_pct_of_sales}
+                  onChange={(e) => setForm({ ...form, paper_goods_pct_of_sales: e.target.value })}
+                />
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">Used in QTR Report: Goal = % × Actual Sales.</p>
             <div className="space-y-2">
               <Label>Address</Label>
               <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
