@@ -309,7 +309,11 @@ function DashboardPage() {
     const varCust = cust - lyCust;
     const lyAvg = lyCust > 0 ? ly / lyCust : 0;
     const actAvg = cust > 0 ? actual / cust : 0;
-    const focusItem = focusByDate.get(d) ?? 0;
+    // Prefer freshly synced quantity; otherwise fall back to the last stored
+    // value so days that didn't get a successful sync don't blank out.
+    const syncedFocus = focusByDate.get(d);
+    const storedFocus = Number(s?.focus_item_qty ?? 0);
+    const focusItem = syncedFocus != null ? syncedFocus : storedFocus;
     // Future days never have actuals — gate before considering any stored row.
     const isFuture = d > todayISOForRows;
     const hasActual =
