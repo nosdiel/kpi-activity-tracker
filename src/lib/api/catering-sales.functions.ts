@@ -508,3 +508,66 @@ export const getCateringSales = createServerFn({ method: "POST" })
     return { results, errors, rateLimited };
   });
 
+export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input) =>
+    z
+      .object({
+        location_id: z.string().uuid(),
+        start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      })
+      .parse(input)
+  )
+  .handler(async ({ data }) => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: loc, error } = await supabaseAdmin
+      .from("locations")
+      .select(
+        "id,name,pos_provider,toast_restaurant_guid,toast_client_id,toast_client_secret,toast_analytics_client_id,toast_analytics_client_secret,toast_api_url"
+      )
+      .eq("id", data.location_id)
+      .maybeSingle();
+    if (error) throw new Error(error.message);
+    if (!loc) throw new Error("Location not found");
+    if (loc.pos_provider !== "toast" || !loc.toast_restaurant_guid) {
+      throw new Error("Location is not configured for Toast");
+    }
+    const creds = pickToastCreds(loc);
+    if (!creds) throw new Error("Toast credentials not configured");
+    const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
+
+    const requestBody = {
+      startBusinessDate: compactBusinessDate(data.start_date),
+      endBusinessDate: compactBusinessDate(data.end_date),
+      restaurantIds: [loc.toast_restaurant_guid],
+      excludedRestaurantIds: [] as string[],
+      groupBy: ["DINING_OPTION"],
+    };
+
+    const token = await toastAccessToken(base, creds.clientId, creds.clientSecret);
+    const guid = await queueToastCreate(() =>
+      createToastDiningMetricsReport(base, token, loc.toast_restaurant_guid!, data.start_date, data.end_date, true)
+    );
+    const rows = await fetchToastDiningMetricsReport(base, token, guid);
+
+    const normalized = rows.map((r) => ({
+      diningOption: diningOptionLabel(r) || null,
+      netSalesAmount: r.netSalesAmount ?? null,
+      grossSalesAmount: r.grossSalesAmount ?? null,
+      businessDate: isoFromToastBusinessDate(r.businessDate ?? r.date) || null,
+      restaurantGuid: loc.toast_restaurant_guid,
+      raw: r,
+    }));
+
+    return {
+      location: { id: loc.id, name: loc.name, restaurantGuid: loc.toast_restaurant_guid },
+      endpoint: `${base}/era/v1/metrics/week`,
+      requestBody,
+      reportRequestGuid: guid,
+      rowCount: rows.length,
+      rows: normalized,
+    };
+  });
+
+
