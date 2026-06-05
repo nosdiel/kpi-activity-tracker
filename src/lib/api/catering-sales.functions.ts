@@ -160,7 +160,7 @@ async function createToastDiningMetricsReport(
         groupBy: ["DINING_OPTION"],
       }),
     },
-    8_000
+    20_000
   );
   if (res.status === 429) throw new ToastRateLimitError();
   if (!res.ok) {
@@ -282,6 +282,37 @@ function diningRowsToCatering(rows: ToastDiningMetricsRow[], locationId: string,
     centsByDate.set(businessDate, (centsByDate.get(businessDate) ?? 0) + cents);
   }
   return [...centsByDate.entries()].map(([business_date, cents]) => ({ location_id: locationId, business_date, amount: cents / 100 }));
+}
+
+async function saveWeeklyCateringActuals(
+  supabaseAdmin: any,
+  locationId: string,
+  fiscalYear: number | undefined,
+  weeks: CateringWeekInput[],
+  days: CateringDay[]
+): Promise<void> {
+  if (!fiscalYear) return;
+  const rows = weeks.flatMap((week) => {
+    if (!week.fiscal_week) return [];
+    const cents = days.reduce((sum, day) => {
+      if (day.location_id !== locationId) return sum;
+      if (day.business_date < week.start_date || day.business_date > week.end_date) return sum;
+      return sum + Math.round(Number(day.amount ?? 0) * 100);
+    }, 0);
+    return [{
+      location_id: locationId,
+      fiscal_year: fiscalYear,
+      fiscal_week: week.fiscal_week,
+      week_start_date: week.start_date,
+      catering: cents / 100,
+      updated_at: new Date().toISOString(),
+    }];
+  });
+  if (rows.length === 0) return;
+  const { error } = await supabaseAdmin
+    .from("weekly_pnl")
+    .upsert(rows, { onConflict: "location_id,fiscal_year,fiscal_week" });
+  if (error) throw new Error(error.message);
 }
 
 function diningOptionLabel(row: ToastDiningMetricsRow): string {
