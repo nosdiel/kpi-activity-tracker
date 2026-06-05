@@ -277,48 +277,8 @@ function WeeklyPnlPage() {
     clear();
   };
 
-  const cateringFn = useServerFn(getCateringSales);
-  const diagFn = useServerFn(getToastCateringDiagnostics);
-  const handleToastDiagnostics = async () => {
-    if (!locationId || dates.length !== 7) return;
-    setDiagLoading(true);
-    setDiagResult(null);
-    try {
-      const res = await diagFn({
-        data: { location_id: locationId, start_date: dates[0], end_date: dates[6] },
-      });
-      setDiagResult(res);
-      toast.success(`Toast returned ${res.rowCount} rows`);
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setDiagLoading(false);
-    }
-  };
   const handleRefresh = () => { pnlQ.refetch(); salesQ.refetch(); };
-  const handleToastRefresh = async () => {
-    if (!locationId || !fy || !week || dates.length !== 7) return;
-    setRefreshingToast(true);
-    try {
-      const res = await cateringFn({
-        data: {
-          location_ids: [locationId],
-          start_date: dates[0],
-          end_date: dates[6],
-          fiscal_year: fy,
-          weeks: [{ fiscal_week: week, start_date: dates[0], end_date: dates[6] }],
-        },
-      });
-      const total = (res.results ?? []).reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
-      setCatering(total ? String(total) : "");
-      if ((res.errors ?? []).length > 0) toast.error(res.errors[0].message);
-      else toast.success("Toast catering actual loaded");
-    } catch (e) {
-      toast.error((e as Error).message);
-    } finally {
-      setRefreshingToast(false);
-    }
-  };
+
 
   const handleSave = async () => {
     if (!locationId || !fy || !week) return;
