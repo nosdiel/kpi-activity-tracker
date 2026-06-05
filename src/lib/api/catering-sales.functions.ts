@@ -557,7 +557,7 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
       grossSalesAmount: r.grossSalesAmount ?? null,
       businessDate: isoFromToastBusinessDate(r.businessDate ?? r.date) || null,
       restaurantGuid: loc.toast_restaurant_guid,
-      raw: JSON.parse(JSON.stringify(r)) as Record<string, unknown>,
+      raw: JSON.stringify(r),
     }));
 
     return {
