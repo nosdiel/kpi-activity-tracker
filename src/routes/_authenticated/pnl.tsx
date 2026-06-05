@@ -411,10 +411,8 @@ function WeeklyPnlPage() {
             <ReadonlyAmount value={foodSales} />
             <PctCell>—</PctCell>
           </Row>
-          <Row label="Catering Order" i={1}>
-            <AmountInput value={catering} onChange={setCatering} />
-            <PctCell>{pctFmt(pctOf(cateringN))}</PctCell>
-          </Row>
+
+
 
           <TotalRow label="Total Sales" value={money(totalSales)} />
 
