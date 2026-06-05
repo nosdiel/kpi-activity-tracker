@@ -514,7 +514,7 @@ export const getCateringSales = createServerFn({ method: "POST" })
           const creds = pickToastCreds(loc, { analyticsOnly: true });
           if (!creds) throw new Error("Toast Analytics credentials not configured");
           const token = await toastAccessToken(base, creds.clientId, creds.clientSecret);
-          for (const week of requestedWeeks) {
+          if (requestedWeeks.length > 1) {
             locResults.push(
               ...(await toastCateringRangeByDiningOption(
                 supabaseAdmin,
@@ -522,12 +522,26 @@ export const getCateringSales = createServerFn({ method: "POST" })
                 token,
                 loc.toast_restaurant_guid,
                 loc.id,
-                week.start_date,
-                week.end_date,
-                data.fiscal_year,
-                week.fiscal_week
+                requestedWeeks[0].start_date,
+                requestedWeeks[requestedWeeks.length - 1].end_date
               ))
             );
+          } else {
+            for (const week of requestedWeeks) {
+              locResults.push(
+                ...(await toastCateringRangeByDiningOption(
+                  supabaseAdmin,
+                  base,
+                  token,
+                  loc.toast_restaurant_guid,
+                  loc.id,
+                  week.start_date,
+                  week.end_date,
+                  data.fiscal_year,
+                  week.fiscal_week
+                ))
+              );
+            }
           }
         }
       } catch (e) {
