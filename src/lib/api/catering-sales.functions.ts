@@ -44,9 +44,35 @@ function compactBusinessDate(iso: string): number {
 
 function readableToastError(area: string, status: number): string {
   if (status === 429) {
-    return "Toast is temporarily rate-limiting catering sales. Please wait 5–10 minutes, then click Refresh again.";
+    return "Toast rate limit reached, try again later.";
   }
   return `${area} failed with status ${status}.`;
+}
+
+class ToastRateLimitError extends Error {
+  readonly rateLimited = true as const;
+  constructor() {
+    super("Toast rate limit reached, try again later.");
+  }
+}
+
+// Serialize Toast Analytics report-create calls across the whole request.
+// Toast 429s aggressively when multiple create calls happen in quick succession.
+const TOAST_CREATE_DELAY_MS = 12_000;
+let toastCreateChain: Promise<unknown> = Promise.resolve();
+let lastToastCreateAt = 0;
+function queueToastCreate<T>(fn: () => Promise<T>): Promise<T> {
+  const run = toastCreateChain.then(async () => {
+    const wait = Math.max(0, TOAST_CREATE_DELAY_MS - (Date.now() - lastToastCreateAt));
+    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    try {
+      return await fn();
+    } finally {
+      lastToastCreateAt = Date.now();
+    }
+  });
+  toastCreateChain = run.catch(() => undefined);
+  return run as Promise<T>;
 }
 
 function toastMetricsRange(startISO: string, endISO: string): "week" | "month" | "year" {
