@@ -68,7 +68,7 @@ function QtrPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("locations")
-        .select("id,name,region,payroll_pct_of_sales")
+        .select("id,name,region,payroll_pct_of_sales,food_cost_pct_of_sales,paper_goods_pct_of_sales")
         .eq("active", true)
         .order("name");
       if (error) throw error;
