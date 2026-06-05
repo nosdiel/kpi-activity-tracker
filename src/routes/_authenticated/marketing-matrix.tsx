@@ -182,7 +182,7 @@ function MarketingMatrixPage() {
               onClick={() => runMut.mutate()}
               disabled={
                 !locationId ||
-                (manualMode ? !manualName.trim() : !itemId) ||
+                !itemId ||
                 runMut.isPending
               }
             >
