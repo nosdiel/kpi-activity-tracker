@@ -153,32 +153,59 @@ function MarketingMatrixPage() {
             </Select>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Marketed item</Label>
-            <Select value={itemId} onValueChange={setItemId} disabled={!menuQ.data}>
-              <SelectTrigger>
-                <SelectValue
-                  placeholder={
-                    !locationId
-                      ? "Select location first"
-                      : menuQ.isLoading
-                      ? "Loading menu…"
-                      : menuQ.error
-                      ? "Menu error"
-                      : "Select item"
-                  }
+          <div className="space-y-1.5 md:col-span-2">
+            <div className="flex items-center justify-between">
+              <Label>Marketed item</Label>
+              <button
+                type="button"
+                onClick={() => setManualMode((m) => !m)}
+                className="text-xs text-muted-foreground hover:text-foreground underline"
+              >
+                {manualMode ? "Pick from POS menu" : "Enter manually"}
+              </button>
+            </div>
+
+            {manualMode ? (
+              <div className="grid grid-cols-2 gap-2">
+                <Input
+                  placeholder="Name (e.g. Guava Pastry)"
+                  value={manualName}
+                  onChange={(e) => setManualName(e.target.value)}
                 />
-              </SelectTrigger>
-              <SelectContent className="max-h-[320px]">
-                {(menuQ.data?.items ?? []).map((i) => (
-                  <SelectItem key={i.id} value={i.id}>
-                    {i.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {menuQ.error && (
-              <p className="text-xs text-destructive">{(menuQ.error as Error).message}</p>
+                <Input
+                  placeholder="POS Product (matches line item name)"
+                  value={manualPosProduct}
+                  onChange={(e) => setManualPosProduct(e.target.value)}
+                />
+              </div>
+            ) : (
+              <Select value={itemId} onValueChange={setItemId} disabled={!menuQ.data || menuQ.data.items.length === 0}>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      !locationId
+                        ? "Select location first"
+                        : menuQ.isLoading
+                        ? "Loading menu…"
+                        : (menuQ.data?.items.length ?? 0) === 0
+                        ? "Menu unavailable — use manual entry"
+                        : "Select item"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent className="max-h-[320px]">
+                  {(menuQ.data?.items ?? []).map((i) => (
+                    <SelectItem key={i.id} value={i.id}>
+                      {i.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {menuQ.data?.manual_required && !manualMode && (
+              <p className="text-xs text-amber-600">
+                POS menu access isn't available for this location — switch to manual entry.
+              </p>
             )}
           </div>
 
@@ -198,13 +225,25 @@ function MarketingMatrixPage() {
             </p>
             <Button
               onClick={() => runMut.mutate()}
-              disabled={!locationId || !itemId || runMut.isPending}
+              disabled={
+                !locationId ||
+                (manualMode ? !manualName.trim() : !itemId) ||
+                runMut.isPending
+              }
             >
               {runMut.isPending ? "Analyzing…" : "Run analysis"}
             </Button>
           </div>
         </CardContent>
       </Card>
+
+      {result?.analytics_only && result.notice && (
+        <Card>
+          <CardContent className="py-4 text-sm text-amber-700 dark:text-amber-300">
+            {result.notice}
+          </CardContent>
+        </Card>
+      )}
 
       {runMut.isPending && (
         <Card>
