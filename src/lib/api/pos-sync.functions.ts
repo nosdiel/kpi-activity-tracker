@@ -536,6 +536,33 @@ export const updateLocationPosCredentials = createServerFn({ method: "POST" })
     setIfPresent("toast_analytics_client_id");
     setIfPresent("toast_analytics_client_secret");
 
+    // Square: auto-derive the location ID from the access token. /v2/locations
+    // returns every location the token can access; pick the requested one if
+    // accessible, otherwise the first ACTIVE one. Prevents 403s from a stale
+    // location ID that belongs to a different merchant than the token.
+    if (data.provider === "square" && data.square_access_token) {
+      const res = await fetch(`${SQUARE_BASE}/v2/locations`, {
+        headers: {
+          "Square-Version": "2024-09-19",
+          Authorization: `Bearer ${data.square_access_token}`,
+        },
+      });
+      if (!res.ok) {
+        throw new Error(`Square token check ${res.status}: ${(await res.text()).slice(0, 240)}`);
+      }
+      const json = (await res.json()) as {
+        locations?: Array<{ id: string; status?: string; name?: string }>;
+      };
+      const locations = json.locations ?? [];
+      if (locations.length === 0) {
+        throw new Error("Square token has no accessible locations.");
+      }
+      const requestedId = (data.square_location_id ?? "").trim();
+      const match = requestedId ? locations.find((l) => l.id === requestedId) : undefined;
+      const chosen = match ?? locations.find((l) => l.status === "ACTIVE") ?? locations[0];
+      patch.square_location_id = chosen.id;
+    }
+
     const { error } = await supabaseAdmin
       .from("locations")
       .update(patch)
