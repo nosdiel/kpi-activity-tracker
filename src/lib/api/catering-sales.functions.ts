@@ -100,12 +100,16 @@ function isoRangeDates(startISO: string, endISO: string): string[] {
   return out;
 }
 
-function pickToastCreds(loc: any): { clientId: string; clientSecret: string } | null {
+function pickToastCreds(
+  loc: any,
+  opts: { analyticsOnly?: boolean } = {}
+): { clientId: string; clientSecret: string; source: "analytics" | "standard" } | null {
   const std = { clientId: loc?.toast_client_id as string | null, clientSecret: loc?.toast_client_secret as string | null };
   const ana = { clientId: loc?.toast_analytics_client_id as string | null, clientSecret: loc?.toast_analytics_client_secret as string | null };
-  const chosen = ana.clientId && ana.clientSecret ? ana : std;
-  if (!chosen.clientId || !chosen.clientSecret) return null;
-  return { clientId: chosen.clientId!, clientSecret: chosen.clientSecret! };
+  if (ana.clientId && ana.clientSecret) return { clientId: ana.clientId!, clientSecret: ana.clientSecret!, source: "analytics" };
+  if (opts.analyticsOnly) return null;
+  if (std.clientId && std.clientSecret) return { clientId: std.clientId!, clientSecret: std.clientSecret!, source: "standard" };
+  return null;
 }
 
 async function toastAccessToken(base: string, clientId: string, clientSecret: string): Promise<string> {
@@ -159,7 +163,13 @@ async function createToastDiningMetricsReport(
     8_000
   );
   if (res.status === 429) throw new ToastRateLimitError();
-  if (!res.ok) throw new Error(readableToastError(`Toast dining metrics create ${range}`, res.status));
+  if (!res.ok) {
+    const body = (await res.text()).slice(0, 300);
+    const hint = res.status === 401 || res.status === 403
+      ? " Toast Analytics (ERA) credentials required — set toast_analytics_client_id/secret on this location; standard Toast API creds don't have ERA scope."
+      : "";
+    throw new Error(`Toast dining metrics create ${range} failed with status ${res.status}.${hint} ${body}`.trim());
+  }
   const raw = await res.text();
   let guid = "";
   try {
@@ -533,8 +543,8 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
     if (loc.pos_provider !== "toast" || !loc.toast_restaurant_guid) {
       throw new Error("Location is not configured for Toast");
     }
-    const creds = pickToastCreds(loc);
-    if (!creds) throw new Error("Toast credentials not configured");
+    const creds = pickToastCreds(loc, { analyticsOnly: true });
+    if (!creds) throw new Error("Toast Analytics credentials not configured for this location. Set toast_analytics_client_id and toast_analytics_client_secret — the ERA /metrics endpoints reject standard Toast API credentials with 401.");
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
 
     const requestBody = {
