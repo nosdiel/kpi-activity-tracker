@@ -196,8 +196,9 @@ export const getPosMenu = createServerFn({ method: "POST" })
     if (error) {
       return { provider, items: [] as MenuItem[], manual_required: false, error: error.message };
     }
+    const today = new Date().toISOString().slice(0, 10);
     const items: MenuItem[] = (rows ?? [])
-      .filter((r: any) => !r.active_to) // only currently-active items
+      .filter((r: any) => !r.active_to || String(r.active_to) >= today) // active now or in the future
       .map((r: any) => ({ id: r.id as string, name: (r.pos_product || r.name) as string }));
     return { provider, items, manual_required: false };
   });
