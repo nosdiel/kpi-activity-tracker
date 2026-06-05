@@ -233,19 +233,33 @@ function LocationsPage() {
                 <Input value={form.timezone} onChange={(e) => setForm({ ...form, timezone: e.target.value })} />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>Payroll Goal (% of Sales)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                placeholder="e.g. 28.5"
-                value={form.payroll_pct_of_sales}
-                onChange={(e) => setForm({ ...form, payroll_pct_of_sales: e.target.value })}
-              />
-              <p className="text-xs text-muted-foreground">Used in QTR Report to compute Payroll goal = % × Actual Sales.</p>
+            <div className="grid grid-cols-3 gap-3">
+              <div className="space-y-2">
+                <Label>Payroll Goal (% of Sales)</Label>
+                <Input
+                  type="number" step="0.01" min="0" max="100" placeholder="e.g. 28.5"
+                  value={form.payroll_pct_of_sales}
+                  onChange={(e) => setForm({ ...form, payroll_pct_of_sales: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Food Cost Goal (% of Sales)</Label>
+                <Input
+                  type="number" step="0.01" min="0" max="100" placeholder="e.g. 30"
+                  value={form.food_cost_pct_of_sales}
+                  onChange={(e) => setForm({ ...form, food_cost_pct_of_sales: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Paper Goods Goal (% of Sales)</Label>
+                <Input
+                  type="number" step="0.01" min="0" max="100" placeholder="e.g. 3"
+                  value={form.paper_goods_pct_of_sales}
+                  onChange={(e) => setForm({ ...form, paper_goods_pct_of_sales: e.target.value })}
+                />
+              </div>
             </div>
+            <p className="text-xs text-muted-foreground">Used in QTR Report: Goal = % × Actual Sales.</p>
             <div className="space-y-2">
               <Label>Address</Label>
               <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
