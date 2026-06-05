@@ -38,6 +38,7 @@ type DailySale = {
   last_year_sales: number | null;
   last_year_customer_count: number | null;
   dessert_count: number | null;
+  focus_item_qty: number | null;
 };
 type Target = {
   fiscal_year: number;
@@ -171,7 +172,7 @@ function DashboardPage() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from("daily_sales")
-        .select("business_date,actual_sales,total_cents,actual_customer_count,last_year_sales,last_year_customer_count,dessert_count")
+        .select("business_date,actual_sales,total_cents,actual_customer_count,last_year_sales,last_year_customer_count,dessert_count,focus_item_qty")
         .eq("location_id", locationId)
         .gte("business_date", dates[0])
         .lte("business_date", dates[6]);
@@ -308,7 +309,11 @@ function DashboardPage() {
     const varCust = cust - lyCust;
     const lyAvg = lyCust > 0 ? ly / lyCust : 0;
     const actAvg = cust > 0 ? actual / cust : 0;
-    const focusItem = focusByDate.get(d) ?? 0;
+    // Prefer freshly synced quantity; otherwise fall back to the last stored
+    // value so days that didn't get a successful sync don't blank out.
+    const syncedFocus = focusByDate.get(d);
+    const storedFocus = Number(s?.focus_item_qty ?? 0);
+    const focusItem = syncedFocus != null ? syncedFocus : storedFocus;
     // Future days never have actuals — gate before considering any stored row.
     const isFuture = d > todayISOForRows;
     const hasActual =

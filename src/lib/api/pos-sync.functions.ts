@@ -1357,9 +1357,21 @@ export const getTrackableItemDailyQuantity = createServerFn({ method: "POST" })
 
       const byDate: Record<string, number> = {};
       let lastErr = "";
+      const upserts: Array<{ location_id: string; business_date: string; focus_item_qty: number }> = [];
       for (const r of results) {
-        if (r.status === "fulfilled") byDate[r.value.iso] = r.value.qty;
-        else lastErr = (r.reason as Error)?.message ?? String(r.reason);
+        if (r.status === "fulfilled") {
+          byDate[r.value.iso] = r.value.qty;
+          upserts.push({ location_id: data.location_id, business_date: r.value.iso, focus_item_qty: r.value.qty });
+        } else {
+          lastErr = (r.reason as Error)?.message ?? String(r.reason);
+        }
+      }
+      // Persist successful fetches so values are kept across reloads and only
+      // overwritten when a fresh sync returns a different number.
+      if (upserts.length > 0) {
+        await supabaseAdmin
+          .from("daily_sales")
+          .upsert(upserts, { onConflict: "location_id,business_date" });
       }
       return {
         byDate,
