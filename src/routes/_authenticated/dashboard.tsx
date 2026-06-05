@@ -290,6 +290,7 @@ function DashboardPage() {
     return m;
   }, [focusDailyQ.data]);
 
+  const todayISOForRows = new Date().toISOString().slice(0, 10);
   const rows = dates.map((d, i) => {
     const s = byDate.get(d);
     const lyRow = lyByDate.get(lyDates[i]);
@@ -308,7 +309,14 @@ function DashboardPage() {
     const lyAvg = lyCust > 0 ? ly / lyCust : 0;
     const actAvg = cust > 0 ? actual / cust : 0;
     const focusItem = focusByDate.get(d) ?? 0;
-    const hasActual = s && (s.actual_sales !== null || s.actual_customer_count !== null);
+    // Future days never have actuals — gate before considering any stored row.
+    const isFuture = d > todayISOForRows;
+    const hasActual =
+      !isFuture &&
+      !!s &&
+      (Number(s.actual_sales ?? 0) > 0 ||
+        Number(s.total_cents ?? 0) > 0 ||
+        Number(s.actual_customer_count ?? 0) > 0);
     return { date: d, day: dayNameFromISO(d), ly, lyCust, actual, cust, target, varSales, varCust, lyAvg, actAvg, focusItem, hasActual };
   });
 
