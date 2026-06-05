@@ -337,6 +337,7 @@ function QtrPage() {
             <Select value={locationId} onValueChange={setLocationId}>
               <SelectTrigger><SelectValue placeholder="Pick location" /></SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All locations</SelectItem>
                 {filteredLocations.map((l) => (
                   <SelectItem key={l.id} value={l.id}>{l.name}</SelectItem>
                 ))}
