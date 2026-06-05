@@ -193,9 +193,13 @@ export const getPosMenu = createServerFn({ method: "POST" })
       }
     }
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
-    const tok = await toastAuth(base, loc.toast_client_id, loc.toast_client_secret);
-    const items = await toastMenu(base, tok, loc.toast_restaurant_guid);
-    return { provider, items, manual_required: items.length === 0 };
+    try {
+      const tok = await toastAuth(base, loc.toast_client_id, loc.toast_client_secret);
+      const items = await toastMenu(base, tok, loc.toast_restaurant_guid);
+      return { provider, items, manual_required: items.length === 0 };
+    } catch {
+      return { provider, items: [] as MenuItem[], manual_required: true };
+    }
   });
 
 // ---------------- Order fetching ----------------
