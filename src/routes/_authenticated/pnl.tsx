@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw, Save, Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getCateringSales } from "@/lib/api/catering-sales.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -108,9 +110,10 @@ function WeeklyPnlPage() {
   const [fy, setFy] = useState<number | null>(null);
   const [week, setWeek] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [refreshingToast, setRefreshingToast] = useState(false);
 
   // Editable state
-  const [outsideSales, setOutsideSales] = useState("");
+  const [catering, setCatering] = useState("");
   const [wages, setWages] = useState("");
   const [repairs, setRepairs] = useState("");
   const [foodLines, setFoodLines] = useState<VendorLine[]>(
@@ -212,7 +215,7 @@ function WeeklyPnlPage() {
   // Hydrate local state when row arrives or selection changes
   useEffect(() => {
     const row = pnlQ.data;
-    setOutsideSales("");
+    setCatering(row?.catering != null ? String(row.catering) : "");
     setWages(row?.wages != null ? String(row.wages) : "");
     setRepairs(row?.repairs != null ? String(row.repairs) : "");
 
@@ -232,10 +235,10 @@ function WeeklyPnlPage() {
     () => (salesQ.data ?? []).reduce((s, r) => s + Number(r.actual_sales ?? 0), 0),
     [salesQ.data],
   );
-  const outsideSalesN = parseNum(outsideSales);
+  const cateringN = parseNum(catering);
   const wagesN = parseNum(wages);
   const repairsN = parseNum(repairs);
-  const totalSales = foodSales;
+  const totalSales = foodSales + cateringN;
   const foodCostTotal = foodLines.reduce((s, v) => s + (v.amount || 0), 0);
   const paperTotal = paperLines.reduce((s, v) => s + (v.amount || 0), 0);
   const totalCogs = wagesN + foodCostTotal + paperTotal + repairsN;
@@ -275,7 +278,31 @@ function WeeklyPnlPage() {
     clear();
   };
 
+  const cateringFn = useServerFn(getCateringSales);
   const handleRefresh = () => { pnlQ.refetch(); salesQ.refetch(); };
+  const handleToastRefresh = async () => {
+    if (!locationId || !fy || !week || dates.length !== 7) return;
+    setRefreshingToast(true);
+    try {
+      const res = await cateringFn({
+        data: {
+          location_ids: [locationId],
+          start_date: dates[0],
+          end_date: dates[6],
+          fiscal_year: fy,
+          weeks: [{ fiscal_week: week, start_date: dates[0], end_date: dates[6] }],
+        },
+      });
+      const total = (res.results ?? []).reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
+      setCatering(total ? String(total) : "");
+      if ((res.errors ?? []).length > 0) toast.error(res.errors[0].message);
+      else toast.success("Toast catering actual loaded");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRefreshingToast(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!locationId || !fy || !week) return;
@@ -300,6 +327,7 @@ function WeeklyPnlPage() {
           location_id: locationId,
           fiscal_year: fy,
           fiscal_week: week,
+          catering: cateringN,
           wages: wagesN,
           repairs: repairsN,
           vendor_amounts,
@@ -327,6 +355,10 @@ function WeeklyPnlPage() {
           <Button variant="outline" size="sm" disabled>Weekly P&L</Button>
           <Button variant="outline" size="sm" asChild>
             <Link to="/pnl-qtr">QTR Report</Link>
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleToastRefresh} disabled={refreshingToast || !locationId || dates.length !== 7}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshingToast ? "animate-spin" : ""}`} />
+            {refreshingToast ? "Refreshing Toast…" : "Refresh Toast Data"}
           </Button>
           <Button variant="outline" size="sm" onClick={handleRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" /> Refresh
@@ -407,9 +439,9 @@ function WeeklyPnlPage() {
             <ReadonlyAmount value={foodSales} />
             <PctCell>—</PctCell>
           </Row>
-          <Row label="Outside Sales" i={1}>
-            <AmountInput value={outsideSales} onChange={setOutsideSales} />
-            <PctCell>{pctFmt(pctOf(outsideSalesN))}</PctCell>
+          <Row label="Catering Order" i={1}>
+            <AmountInput value={catering} onChange={setCatering} />
+            <PctCell>{pctFmt(pctOf(cateringN))}</PctCell>
           </Row>
 
           <TotalRow label="Total Sales" value={money(totalSales)} />

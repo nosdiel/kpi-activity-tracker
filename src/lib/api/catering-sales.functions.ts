@@ -6,11 +6,17 @@ const SQUARE_BASE = "https://connect.squareup.com";
 const TOAST_BASE = "https://ws-api.toasttab.com";
 
 type CateringDay = { location_id: string; business_date: string; amount: number };
+type CateringWeekInput = { fiscal_year?: number; fiscal_week?: number; start_date: string; end_date: string };
 type ToastDiningMetricsRow = {
   businessDate?: string | number;
-  diningOption?: string | null;
+  date?: string | number;
+  diningOption?: string | { name?: string | null; value?: string | null } | null;
+  diningOptionName?: string | null;
+  name?: string | null;
+  dimensions?: Record<string, unknown>;
   netSalesAmount?: number;
   grossSalesAmount?: number;
+  sales?: number;
 };
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs = 12_000): Promise<Response> {
@@ -133,14 +139,15 @@ async function createToastDiningMetricsReport(
   accessToken: string,
   restaurantGuid: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  forceWeekEndpoint = false
 ): Promise<string> {
-  const range = toastMetricsRange(startDate, endDate);
+  const range = forceWeekEndpoint ? "week" : toastMetricsRange(startDate, endDate);
   const res = await fetchWithTimeout(
     `${base}/era/v1/metrics/${range}`,
     {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", "Toast-Restaurant-External-ID": restaurantGuid },
       body: JSON.stringify({
         startBusinessDate: compactBusinessDate(startDate),
         endBusinessDate: compactBusinessDate(endDate),
@@ -166,7 +173,7 @@ async function createToastDiningMetricsReport(
 }
 
 async function fetchToastDiningMetricsReport(base: string, accessToken: string, reportGuid: string): Promise<ToastDiningMetricsRow[]> {
-  const deadline = Date.now() + 14_000;
+  const deadline = Date.now() + 90_000;
   let lastStatus = 0;
   while (Date.now() < deadline) {
     const res = await fetchWithTimeout(`${base}/era/v1/metrics/${reportGuid}`, {
@@ -178,12 +185,15 @@ async function fetchToastDiningMetricsReport(base: string, accessToken: string, 
       const body = await res.json();
       if (Array.isArray(body)) return body as ToastDiningMetricsRow[];
       if (Array.isArray((body as any)?.data)) return (body as any).data as ToastDiningMetricsRow[];
+      if (Array.isArray((body as any)?.rows)) return (body as any).rows as ToastDiningMetricsRow[];
+      if (Array.isArray((body as any)?.results)) return (body as any).results as ToastDiningMetricsRow[];
+      if (Array.isArray((body as any)?.reportData)) return (body as any).reportData as ToastDiningMetricsRow[];
       return [];
     }
     if (res.status !== 202 && res.status !== 204) {
       throw new Error(readableToastError("Toast dining metrics get", res.status));
     }
-    await new Promise((r) => setTimeout(r, 1000));
+    await new Promise((r) => setTimeout(r, 1500));
   }
   throw new Error(`Toast dining metrics: report not ready in time (last status ${lastStatus})`);
 }
@@ -191,23 +201,27 @@ async function fetchToastDiningMetricsReport(base: string, accessToken: string, 
 // Cache TTL — reuse a successful Toast dining-metrics report for this long.
 const TOAST_CACHE_TTL_MS = 6 * 60 * 60 * 1000;
 
-function diningReportType(startDate: string, endDate: string): string {
-  return `dining_metrics:${startDate}:${endDate}`;
+function diningReportType(startDate: string, endDate: string, fiscalYear?: number, fiscalWeek?: number): string {
+  if (fiscalWeek) return `catering_actual_dining_option:fy:${fiscalYear ?? "unknown"}:week:${fiscalWeek}`;
+  return `catering_actual_dining_option:${startDate}:${endDate}`;
 }
 
 async function readCachedDiningRows(
   supabaseAdmin: any,
   locationId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  reportType: string,
+  fiscalYear?: number,
+  fiscalWeek?: number
 ): Promise<{ rows: ToastDiningMetricsRow[]; reportRequestGuid: string | null } | null> {
-  const { data } = await supabaseAdmin
+  let query = supabaseAdmin
     .from("toast_report_jobs")
     .select("rows, report_request_guid, status, updated_at")
     .eq("location_id", locationId)
-    .eq("business_date", startDate)
-    .eq("report_type", diningReportType(startDate, endDate))
-    .maybeSingle();
+    .eq("report_type", reportType);
+  query = fiscalWeek ? query.eq("fiscal_year", fiscalYear).eq("fiscal_week", fiscalWeek) : query.eq("business_date", startDate);
+  const { data } = await query.maybeSingle();
   if (!data || data.status !== "ready" || !Array.isArray(data.rows)) return null;
   const ageMs = Date.now() - new Date(data.updated_at as string).getTime();
   if (ageMs > TOAST_CACHE_TTL_MS) return null;
@@ -218,38 +232,57 @@ async function writeCachedDiningRows(
   supabaseAdmin: any,
   locationId: string,
   startDate: string,
-  endDate: string,
+  fiscalYear: number | undefined,
+  fiscalWeek: number | undefined,
+  reportType: string,
   reportRequestGuid: string,
   rows: ToastDiningMetricsRow[]
 ): Promise<void> {
+  const onConflict = fiscalWeek ? "location_id,fiscal_year,fiscal_week,report_type" : "location_id,business_date,report_type";
   await supabaseAdmin
     .from("toast_report_jobs")
     .upsert(
       {
         location_id: locationId,
         business_date: startDate,
-        report_type: diningReportType(startDate, endDate),
+        fiscal_year: fiscalYear ?? null,
+        fiscal_week: fiscalWeek ?? null,
+        report_type: reportType,
         report_request_guid: reportRequestGuid,
         status: "ready",
         rows,
         error: null,
         updated_at: new Date().toISOString(),
       },
-      { onConflict: "location_id,business_date,report_type" }
+      { onConflict }
     );
 }
 
-function diningRowsToCatering(rows: ToastDiningMetricsRow[], locationId: string): CateringDay[] {
+function diningRowsToCatering(rows: ToastDiningMetricsRow[], locationId: string, fallbackBusinessDate?: string): CateringDay[] {
   const byDate = new Map<string, number>();
   for (const row of rows) {
-    if (!/catering/i.test(row.diningOption ?? "")) continue;
-    const businessDate = isoFromToastBusinessDate(row.businessDate);
+    const diningOption = diningOptionLabel(row);
+    if (!/catering/i.test(diningOption)) continue;
+    const businessDate = isoFromToastBusinessDate(row.businessDate ?? row.date) || fallbackBusinessDate || "";
     if (!businessDate) continue;
-    const amount = Number(row.netSalesAmount ?? row.grossSalesAmount ?? 0);
+    const amount = Number(row.netSalesAmount ?? row.grossSalesAmount ?? row.sales ?? 0);
     if (!Number.isFinite(amount) || amount <= 0) continue;
     byDate.set(businessDate, (byDate.get(businessDate) ?? 0) + amount);
   }
   return [...byDate.entries()].map(([business_date, amount]) => ({ location_id: locationId, business_date, amount }));
+}
+
+function diningOptionLabel(row: ToastDiningMetricsRow): string {
+  const direct = row.diningOption;
+  if (typeof direct === "string") return direct;
+  if (direct && typeof direct === "object") return direct.name ?? direct.value ?? "";
+  const dimDining = row.dimensions?.DINING_OPTION ?? row.dimensions?.diningOption ?? row.dimensions?.dining_option;
+  if (typeof dimDining === "string") return dimDining;
+  if (dimDining && typeof dimDining === "object") {
+    const d = dimDining as { name?: string; value?: string };
+    return d.name ?? d.value ?? "";
+  }
+  return row.diningOptionName ?? row.name ?? "";
 }
 
 async function toastCateringRangeByDiningOption(
@@ -259,18 +292,21 @@ async function toastCateringRangeByDiningOption(
   restaurantGuid: string,
   locationId: string,
   startDate: string,
-  endDate: string
+  endDate: string,
+  fiscalYear?: number,
+  fiscalWeek?: number
 ): Promise<CateringDay[]> {
-  const cached = await readCachedDiningRows(supabaseAdmin, locationId, startDate, endDate);
-  if (cached) return diningRowsToCatering(cached.rows, locationId);
+  const reportType = diningReportType(startDate, endDate, fiscalYear, fiscalWeek);
+  const cached = await readCachedDiningRows(supabaseAdmin, locationId, startDate, endDate, reportType, fiscalYear, fiscalWeek);
+  if (cached) return diningRowsToCatering(cached.rows, locationId, startDate);
 
   // Serialize create-report calls; Toast 429s on bursty creates.
   const guid = await queueToastCreate(() =>
-    createToastDiningMetricsReport(base, accessToken, restaurantGuid, startDate, endDate)
+    createToastDiningMetricsReport(base, accessToken, restaurantGuid, startDate, endDate, true)
   );
   const rows = await fetchToastDiningMetricsReport(base, accessToken, guid);
-  await writeCachedDiningRows(supabaseAdmin, locationId, startDate, endDate, guid, rows).catch(() => undefined);
-  return diningRowsToCatering(rows, locationId);
+  await writeCachedDiningRows(supabaseAdmin, locationId, startDate, fiscalYear, fiscalWeek, reportType, guid, rows).catch(() => undefined);
+  return diningRowsToCatering(rows, locationId, startDate);
 }
 
 
@@ -366,6 +402,17 @@ export const getCateringSales = createServerFn({ method: "POST" })
         location_ids: z.array(z.string().uuid()).min(1).max(50),
         start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        fiscal_year: z.number().int().optional(),
+        weeks: z
+          .array(
+            z.object({
+              fiscal_week: z.number().int().min(1).max(53),
+              start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+              end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+            })
+          )
+          .max(53)
+          .optional(),
       })
       .parse(input)
   )
@@ -373,8 +420,12 @@ export const getCateringSales = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const effectiveEndDate = minISO(data.end_date, todayISO());
     if (effectiveEndDate < data.start_date) return { results: [], errors: [] };
-    const dates = isoRangeDates(data.start_date, effectiveEndDate);
-    if (dates.length > 100) throw new Error("Date range too large (max 100 days)");
+    const requestedWeeks: CateringWeekInput[] = (data.weeks?.length ? data.weeks : [{ start_date: data.start_date, end_date: effectiveEndDate }]).flatMap((w) => {
+      const weekEnd = minISO(w.end_date, effectiveEndDate);
+      return weekEnd < w.start_date ? [] : [{ ...w, end_date: weekEnd }];
+    });
+    const totalDays = requestedWeeks.reduce((sum, w) => sum + isoRangeDates(w.start_date, w.end_date).length, 0);
+    if (totalDays > 370) throw new Error("Date range too large (max 370 days)");
 
     const { data: locs, error } = await supabaseAdmin
       .from("locations")
@@ -396,9 +447,11 @@ export const getCateringSales = createServerFn({ method: "POST" })
       }
       try {
         if (loc.pos_provider === "square" && loc.square_location_id && loc.square_access_token) {
-          for (const d of dates) {
-            const amt = await squareCateringDay(loc.square_access_token, loc.square_location_id, d);
-            if (amt > 0) locResults.push({ location_id: loc.id, business_date: d, amount: amt });
+          for (const week of requestedWeeks) {
+            for (const d of isoRangeDates(week.start_date, week.end_date)) {
+              const amt = await squareCateringDay(loc.square_access_token, loc.square_location_id, d);
+              if (amt > 0) locResults.push({ location_id: loc.id, business_date: d, amount: amt });
+            }
           }
         } else if (loc.pos_provider === "toast" && loc.toast_restaurant_guid) {
           const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
@@ -406,24 +459,30 @@ export const getCateringSales = createServerFn({ method: "POST" })
           if (!creds) throw new Error("Toast credentials not configured");
           const token = await toastAccessToken(base, creds.clientId, creds.clientSecret);
           try {
-            locResults.push(
-              ...(await toastCateringRangeByDiningOption(
-                supabaseAdmin,
-                base,
-                token,
-                loc.toast_restaurant_guid,
-                loc.id,
-                data.start_date,
-                effectiveEndDate
-              ))
-            );
+            for (const week of requestedWeeks) {
+              locResults.push(
+                ...(await toastCateringRangeByDiningOption(
+                  supabaseAdmin,
+                  base,
+                  token,
+                  loc.toast_restaurant_guid,
+                  loc.id,
+                  week.start_date,
+                  week.end_date,
+                  data.fiscal_year,
+                  week.fiscal_week
+                ))
+              );
+            }
           } catch (metricsError) {
             if ((metricsError as any)?.rateLimited) throw metricsError;
             try {
               const cateringGuids = await toastCateringDiningOptionGuids(base, token, loc.toast_restaurant_guid);
-              for (const d of dates) {
-                const amt = await toastCateringDay(base, token, loc.toast_restaurant_guid, d, cateringGuids);
-                if (amt > 0) locResults.push({ location_id: loc.id, business_date: d, amount: amt });
+              for (const week of requestedWeeks) {
+                for (const d of isoRangeDates(week.start_date, week.end_date)) {
+                  const amt = await toastCateringDay(base, token, loc.toast_restaurant_guid, d, cateringGuids);
+                  if (amt > 0) locResults.push({ location_id: loc.id, business_date: d, amount: amt });
+                }
               }
             } catch {
               throw metricsError;
