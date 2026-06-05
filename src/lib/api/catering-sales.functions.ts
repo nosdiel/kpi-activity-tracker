@@ -103,21 +103,27 @@ async function createToastDiningMetricsReport(
   endDate: string
 ): Promise<string> {
   const range = toastMetricsRange(startDate, endDate);
-  const res = await fetchWithTimeout(
-    `${base}/era/v1/metrics/${range}`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        startBusinessDate: compactBusinessDate(startDate),
-        endBusinessDate: compactBusinessDate(endDate),
-        restaurantIds: [restaurantGuid],
-        excludedRestaurantIds: [],
-        groupBy: ["DINING_OPTION"],
-      }),
-    },
-    8_000
-  );
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    res = await fetchWithTimeout(
+      `${base}/era/v1/metrics/${range}`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          startBusinessDate: compactBusinessDate(startDate),
+          endBusinessDate: compactBusinessDate(endDate),
+          restaurantIds: [restaurantGuid],
+          excludedRestaurantIds: [],
+          groupBy: ["DINING_OPTION"],
+        }),
+      },
+      8_000
+    );
+    if (res.status !== 429) break;
+    await new Promise((r) => setTimeout(r, 1_500 * (attempt + 1)));
+  }
+  if (!res) throw new Error("Toast dining metrics request did not run");
   if (!res.ok) throw new Error(`Toast dining metrics create ${range} ${res.status}: ${(await res.text()).slice(0, 240)}`);
   const raw = await res.text();
   let guid = "";
@@ -285,7 +291,8 @@ export const getCateringSales = createServerFn({ method: "POST" })
       .in("id", data.location_ids);
     if (error) throw new Error(error.message);
 
-    const perLocation = await Promise.all(((locs as any[]) ?? []).map(async (loc) => {
+    const perLocation: Array<{ results: CateringDay[]; errors: Array<{ location_id: string; message: string }> }> = [];
+    for (const loc of ((locs as any[]) ?? [])) {
       const locResults: CateringDay[] = [];
       const locErrors: Array<{ location_id: string; message: string }> = [];
       try {
@@ -326,8 +333,9 @@ export const getCateringSales = createServerFn({ method: "POST" })
       } catch (e) {
         locErrors.push({ location_id: loc.id, message: (e as Error).message });
       }
-      return { results: locResults, errors: locErrors };
-    }));
+      perLocation.push({ results: locResults, errors: locErrors });
+      await new Promise((r) => setTimeout(r, 400));
+    }
 
     const results = perLocation.flatMap((r) => r.results);
     const errors = perLocation.flatMap((r) => r.errors);

@@ -5,6 +5,7 @@ import { RefreshCw } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
 import { getCateringSales } from "@/lib/api/catering-sales.functions";
 import { supabase } from "@/integrations/supabase/client";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -300,7 +301,7 @@ function QtrPage() {
         sales: { goal: goalByWeek.get(w) ?? 0, actual: sales },
         payroll: { goal: payrollGoalByWeek.get(w) ?? 0, actual: p.wages },
         food_cost: { goal: foodGoalByWeek.get(w) ?? 0, actual: p.food },
-        catering: { goal: 0, actual: cateringByWeek.get(w) ?? 0 },
+        catering: { goal: 0, actual: cateringByWeek.get(w) ?? p.catering },
         paper_good: { goal: paperGoalByWeek.get(w) ?? 0, actual: p.paper },
       };
       return { week: w, vals };
@@ -332,6 +333,10 @@ function QtrPage() {
     const b = Math.ceil((n - a) / 2);
     return [weeks.slice(0, a), weeks.slice(a, a + b), weeks.slice(a + b)];
   }, [weeks]);
+  const isRefreshing = targetsQ.isFetching || pnlQ.isFetching || salesQ.isFetching || cateringQ.isFetching;
+  const cateringErrorCount = cateringQ.data?.errors?.length ?? 0;
+  const cateringLoadedCount = cateringQ.data?.results?.length ?? 0;
+  const savedCateringTotal = totals.catering.actual;
 
   const handleRefresh = () => {
     targetsQ.refetch();
@@ -360,11 +365,25 @@ function QtrPage() {
             <Link to="/pnl">Weekly PNL</Link>
           </Button>
           <Button variant="outline" size="sm" disabled>QTR Report</Button>
-          <Button variant="outline" size="sm" onClick={handleRefresh}>
-            <RefreshCw className="h-4 w-4 mr-2" /> Refresh
+          <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+            {isRefreshing ? "Refreshing…" : "Refresh"}
           </Button>
         </div>
       </div>
+
+      {(cateringQ.isFetching || cateringErrorCount > 0 || cateringLoadedCount > 0) && (
+        <Alert variant={cateringErrorCount > 0 ? "destructive" : "default"}>
+          <AlertTitle>Catering sales</AlertTitle>
+          <AlertDescription>
+            {cateringQ.isFetching
+              ? "Loading catering sales from POS…"
+              : cateringErrorCount > 0
+                ? `Toast did not return catering sales for ${cateringErrorCount} location${cateringErrorCount === 1 ? "" : "s"}; showing saved weekly catering total ${money(savedCateringTotal)}. ${cateringQ.data?.errors?.[0]?.message ?? "Try refresh again shortly."}`
+                : `Loaded catering sales for ${cateringLoadedCount} day${cateringLoadedCount === 1 ? "" : "s"}.`}
+          </AlertDescription>
+        </Alert>
+      )}
 
       <Card>
         <CardContent className="pt-6 grid gap-4 md:grid-cols-4">
