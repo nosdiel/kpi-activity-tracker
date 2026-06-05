@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw, Save, Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { getCateringSales } from "@/lib/api/catering-sales.functions";
+import { getCateringSales, getToastCateringDiagnostics } from "@/lib/api/catering-sales.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
