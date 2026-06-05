@@ -3,12 +3,14 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
 import { useServerFn } from "@tanstack/react-start";
-import { getCateringSales } from "@/lib/api/catering-sales.functions";
+import { getCateringSales, getToastCateringDiagnostics } from "@/lib/api/catering-sales.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+import { X } from "lucide-react";
 import {
   quarterWeekRange,
   shiftISODate,
