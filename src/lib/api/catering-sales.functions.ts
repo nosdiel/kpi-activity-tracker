@@ -385,9 +385,15 @@ export const getCateringSales = createServerFn({ method: "POST" })
     if (error) throw new Error(error.message);
 
     const perLocation: Array<{ results: CateringDay[]; errors: Array<{ location_id: string; message: string }> }> = [];
+    let rateLimited = false;
     for (const loc of ((locs as any[]) ?? [])) {
       const locResults: CateringDay[] = [];
       const locErrors: Array<{ location_id: string; message: string }> = [];
+      if (rateLimited) {
+        locErrors.push({ location_id: loc.id, message: "Toast rate limit reached, try again later." });
+        perLocation.push({ results: locResults, errors: locErrors });
+        continue;
+      }
       try {
         if (loc.pos_provider === "square" && loc.square_location_id && loc.square_access_token) {
           for (const d of dates) {
@@ -402,6 +408,7 @@ export const getCateringSales = createServerFn({ method: "POST" })
           try {
             locResults.push(
               ...(await toastCateringRangeByDiningOption(
+                supabaseAdmin,
                 base,
                 token,
                 loc.toast_restaurant_guid,
@@ -411,6 +418,7 @@ export const getCateringSales = createServerFn({ method: "POST" })
               ))
             );
           } catch (metricsError) {
+            if ((metricsError as any)?.rateLimited) throw metricsError;
             try {
               const cateringGuids = await toastCateringDiningOptionGuids(base, token, loc.toast_restaurant_guid);
               for (const d of dates) {
@@ -424,7 +432,12 @@ export const getCateringSales = createServerFn({ method: "POST" })
           }
         }
       } catch (e) {
-        locErrors.push({ location_id: loc.id, message: (e as Error).message });
+        if ((e as any)?.rateLimited) {
+          rateLimited = true;
+          locErrors.push({ location_id: loc.id, message: "Toast rate limit reached, try again later." });
+        } else {
+          locErrors.push({ location_id: loc.id, message: (e as Error).message });
+        }
       }
       perLocation.push({ results: locResults, errors: locErrors });
       await new Promise((r) => setTimeout(r, 400));
@@ -433,5 +446,6 @@ export const getCateringSales = createServerFn({ method: "POST" })
     const results = perLocation.flatMap((r) => r.results);
     const errors = perLocation.flatMap((r) => r.errors);
 
-    return { results, errors };
+    return { results, errors, rateLimited };
   });
+
