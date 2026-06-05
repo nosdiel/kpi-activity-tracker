@@ -543,8 +543,8 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
     if (loc.pos_provider !== "toast" || !loc.toast_restaurant_guid) {
       throw new Error("Location is not configured for Toast");
     }
-    const creds = pickToastCreds(loc);
-    if (!creds) throw new Error("Toast credentials not configured");
+    const creds = pickToastCreds(loc, { analyticsOnly: true });
+    if (!creds) throw new Error("Toast Analytics credentials not configured for this location. Set toast_analytics_client_id and toast_analytics_client_secret — the ERA /metrics endpoints reject standard Toast API credentials with 401.");
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
 
     const requestBody = {
