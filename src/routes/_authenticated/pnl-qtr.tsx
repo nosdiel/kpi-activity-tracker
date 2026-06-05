@@ -2,6 +2,8 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { Fragment, useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
+import { useServerFn } from "@tanstack/react-start";
+import { getCateringSales } from "@/lib/api/pos-sync.functions";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -218,6 +220,23 @@ function QtrPage() {
     },
   });
 
+  const cateringFn = useServerFn(getCateringSales);
+  const cateringQ = useQuery({
+    queryKey: ["qtr-catering", locIdsKey, firstWeekStart, lastWeekEnd],
+    enabled: locIds.length > 0 && !!firstWeekStart && !!lastWeekEnd,
+    queryFn: async () => {
+      const res = await cateringFn({
+        data: {
+          location_ids: locIds,
+          start_date: firstWeekStart as string,
+          end_date: lastWeekEnd as string,
+        },
+      });
+      return res as { results: { location_id: string; business_date: string; amount: number }[]; errors: { location_id: string; message: string }[] };
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Compute per-week values
   const rows = useMemo(() => {
     const pctByLocWeek = new Map<string, number>();
@@ -264,6 +283,16 @@ function QtrPage() {
       }
     });
 
+    const cateringByWeek = new Map<number, number>();
+    (cateringQ.data?.results ?? []).forEach((c) => {
+      for (const [w, [start, end]] of weekDateRanges.entries()) {
+        if (c.business_date >= start && c.business_date <= end) {
+          cateringByWeek.set(w, (cateringByWeek.get(w) ?? 0) + Number(c.amount ?? 0));
+          break;
+        }
+      }
+    });
+
     return weeks.map((w) => {
       const sales = salesByWeek.get(w) ?? 0;
       const p = pnlByWeek.get(w) ?? { catering: 0, wages: 0, food: 0, paper: 0 };
@@ -271,12 +300,12 @@ function QtrPage() {
         sales: { goal: goalByWeek.get(w) ?? 0, actual: sales },
         payroll: { goal: payrollGoalByWeek.get(w) ?? 0, actual: p.wages },
         food_cost: { goal: foodGoalByWeek.get(w) ?? 0, actual: p.food },
-        catering: { goal: 0, actual: p.catering },
+        catering: { goal: 0, actual: cateringByWeek.get(w) ?? 0 },
         paper_good: { goal: paperGoalByWeek.get(w) ?? 0, actual: p.paper },
       };
       return { week: w, vals };
     });
-  }, [targetsQ.data, pnlQ.data, salesQ.data, locationsQ.data, weeks, weekDateRanges]);
+  }, [targetsQ.data, pnlQ.data, salesQ.data, locationsQ.data, cateringQ.data, weeks, weekDateRanges]);
 
   // Totals
   const totals = useMemo(() => {
@@ -308,6 +337,7 @@ function QtrPage() {
     targetsQ.refetch();
     pnlQ.refetch();
     salesQ.refetch();
+    cateringQ.refetch();
   };
 
   const locName =
