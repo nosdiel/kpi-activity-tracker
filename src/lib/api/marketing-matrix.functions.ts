@@ -83,34 +83,103 @@ async function squareMenu(accessToken: string): Promise<MenuItem[]> {
 }
 
 async function toastMenu(base: string, token: string, guid: string): Promise<MenuItem[]> {
-  // /menus/v2/menus returns the published menu structure
-  const res = await fetchWithTimeout(`${base}/menus/v2/menus`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Toast-Restaurant-External-ID": guid,
-    },
-  });
-  if (!res.ok) throw new Error(`Toast menu ${res.status}: ${(await res.text()).slice(0, 200)}`);
-  const j = (await res.json()) as any;
-  const items = new Map<string, string>();
-  const walk = (node: any) => {
-    if (!node) return;
-    if (Array.isArray(node)) {
-      for (const n of node) walk(n);
-      return;
-    }
-    if (typeof node === "object") {
-      // A menu item typically has guid + name + (price or itemGroupGuid)
-      if (typeof node.guid === "string" && typeof node.name === "string" && (node.price !== undefined || node.itemGroupGuid !== undefined)) {
-        items.set(node.guid, node.name);
-      }
-      for (const k of Object.keys(node)) walk(node[k]);
-    }
+  const headers = {
+    Authorization: `Bearer ${token}`,
+    "Toast-Restaurant-External-ID": guid,
   };
-  walk(j);
-  const out = [...items.entries()].map(([id, name]) => ({ id, name }));
-  out.sort((a, b) => a.name.localeCompare(b.name));
-  return out;
+
+  // 1) Try published menus (requires menus.read scope)
+  try {
+    const res = await fetchWithTimeout(`${base}/menus/v2/menus`, { headers });
+    if (res.ok) {
+      const j = (await res.json()) as any;
+      const items = new Map<string, string>();
+      const walk = (node: any) => {
+        if (!node) return;
+        if (Array.isArray(node)) return node.forEach(walk);
+        if (typeof node === "object") {
+          if (
+            typeof node.guid === "string" &&
+            typeof node.name === "string" &&
+            (node.price !== undefined || node.itemGroupGuid !== undefined)
+          ) {
+            items.set(node.guid, node.name);
+          }
+          for (const k of Object.keys(node)) walk(node[k]);
+        }
+      };
+      walk(j);
+      if (items.size > 0) {
+        return [...items.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+      }
+    }
+  } catch {
+    // fall through
+  }
+
+  // 2) Try config menuItems (requires config:read)
+  try {
+    const out: MenuItem[] = [];
+    for (let page = 1; page <= 20; page++) {
+      const res = await fetchWithTimeout(
+        `${base}/config/v2/menuItems?pageSize=200&page=${page}`,
+        { headers }
+      );
+      if (!res.ok) break;
+      const arr = (await res.json()) as Array<{ guid?: string; name?: string }>;
+      if (!Array.isArray(arr) || arr.length === 0) break;
+      for (const it of arr) {
+        if (it.guid && it.name) out.push({ id: it.guid, name: it.name });
+      }
+      if (arr.length < 200) break;
+    }
+    if (out.length > 0) {
+      return out.sort((a, b) => a.name.localeCompare(b.name));
+    }
+  } catch {
+    // fall through
+  }
+
+  // 3) Fallback: derive distinct items from recent orders (last 14 days)
+  const seen = new Map<string, string>();
+  const today = new Date();
+  for (let i = 1; i <= 14; i++) {
+    const d = new Date(today);
+    d.setUTCDate(d.getUTCDate() - i);
+    const compact = d.toISOString().slice(0, 10).replace(/-/g, "");
+    try {
+      for (let page = 1; page < 10; page++) {
+        const res = await fetchWithTimeout(
+          `${base}/orders/v2/ordersBulk?businessDate=${compact}&page=${page}&pageSize=100`,
+          { headers }
+        );
+        if (!res.ok) break;
+        const orders = (await res.json()) as Array<{
+          checks?: Array<{ selections?: Array<{ item?: { guid?: string }; displayName?: string }> }>;
+        }>;
+        if (!orders || orders.length === 0) break;
+        for (const o of orders) {
+          for (const c of o.checks ?? []) {
+            for (const s of c.selections ?? []) {
+              const id = s.item?.guid;
+              const name = s.displayName;
+              if (id && name && !seen.has(id)) seen.set(id, name);
+            }
+          }
+        }
+        if (orders.length < 100) break;
+      }
+    } catch {
+      // continue to next day
+    }
+    if (seen.size > 500) break;
+  }
+  if (seen.size === 0) {
+    throw new Error(
+      "Toast credentials lack menus/config access and no recent orders were found. Grant 'menus.read' or 'config:read' scope to the Toast API client."
+    );
+  }
+  return [...seen.entries()].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 export const getPosMenu = createServerFn({ method: "POST" })
