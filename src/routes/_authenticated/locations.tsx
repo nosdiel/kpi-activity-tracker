@@ -82,14 +82,21 @@ function LocationsPage() {
 
   const saveMut = useMutation({
     mutationFn: async (f: FormState) => {
-      const pctNum = f.payroll_pct_of_sales.trim() === "" ? null : Number(f.payroll_pct_of_sales);
+      const toNum = (s: string) => {
+        const t = s.trim();
+        if (t === "") return null;
+        const n = Number(t);
+        return Number.isFinite(n) ? n : null;
+      };
       const payload = {
         name: f.name.trim(),
         region: f.region.trim() || null,
         timezone: f.timezone.trim() || null,
         address: f.address.trim() || null,
         active: f.active,
-        payroll_pct_of_sales: pctNum !== null && Number.isFinite(pctNum) ? pctNum : null,
+        payroll_pct_of_sales: toNum(f.payroll_pct_of_sales),
+        food_cost_pct_of_sales: toNum(f.food_cost_pct_of_sales),
+        paper_goods_pct_of_sales: toNum(f.paper_goods_pct_of_sales),
       };
       if (f.id) {
         const { error } = await supabase.from("locations").update(payload).eq("id", f.id);
