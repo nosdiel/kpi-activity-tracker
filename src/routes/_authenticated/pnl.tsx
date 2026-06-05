@@ -300,7 +300,6 @@ function WeeklyPnlPage() {
           location_id: locationId,
           fiscal_year: fy,
           fiscal_week: week,
-          catering: cateringN,
           wages: wagesN,
           repairs: repairsN,
           vendor_amounts,
