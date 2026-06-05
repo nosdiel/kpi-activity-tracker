@@ -231,6 +231,11 @@ function QtrPage() {
           location_ids: locIds,
           start_date: firstWeekStart as string,
           end_date: lastWeekEnd as string,
+          fiscal_year: fy as number,
+          weeks: weeks.flatMap((w) => {
+            const range = weekDateRanges.get(w);
+            return range ? [{ fiscal_week: w, start_date: range[0], end_date: range[1] }] : [];
+          }),
         },
       });
       return res as { results: { location_id: string; business_date: string; amount: number }[]; errors: { location_id: string; message: string }[] };

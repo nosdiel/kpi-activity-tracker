@@ -1,8 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { RefreshCw, Save, Plus, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { getCateringSales } from "@/lib/api/catering-sales.functions";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -110,7 +112,7 @@ function WeeklyPnlPage() {
   const [saving, setSaving] = useState(false);
 
   // Editable state
-  const [outsideSales, setOutsideSales] = useState("");
+  const [catering, setCatering] = useState("");
   const [wages, setWages] = useState("");
   const [repairs, setRepairs] = useState("");
   const [foodLines, setFoodLines] = useState<VendorLine[]>(
@@ -212,7 +214,7 @@ function WeeklyPnlPage() {
   // Hydrate local state when row arrives or selection changes
   useEffect(() => {
     const row = pnlQ.data;
-    setOutsideSales("");
+    setCatering(row?.catering != null ? String(row.catering) : "");
     setWages(row?.wages != null ? String(row.wages) : "");
     setRepairs(row?.repairs != null ? String(row.repairs) : "");
 

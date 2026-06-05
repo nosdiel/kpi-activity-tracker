@@ -264,6 +264,8 @@ export type Database = {
           business_date: string
           created_at: string
           error: string | null
+          fiscal_week: number | null
+          fiscal_year: number | null
           id: string
           location_id: string
           next_attempt_at: string
@@ -278,6 +280,8 @@ export type Database = {
           business_date: string
           created_at?: string
           error?: string | null
+          fiscal_week?: number | null
+          fiscal_year?: number | null
           id?: string
           location_id: string
           next_attempt_at?: string
@@ -292,6 +296,8 @@ export type Database = {
           business_date?: string
           created_at?: string
           error?: string | null
+          fiscal_week?: number | null
+          fiscal_year?: number | null
           id?: string
           location_id?: string
           next_attempt_at?: string
