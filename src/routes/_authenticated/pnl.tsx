@@ -110,6 +110,7 @@ function WeeklyPnlPage() {
   const [fy, setFy] = useState<number | null>(null);
   const [week, setWeek] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [refreshingToast, setRefreshingToast] = useState(false);
 
   // Editable state
   const [catering, setCatering] = useState("");
@@ -234,10 +235,10 @@ function WeeklyPnlPage() {
     () => (salesQ.data ?? []).reduce((s, r) => s + Number(r.actual_sales ?? 0), 0),
     [salesQ.data],
   );
-  const outsideSalesN = parseNum(outsideSales);
+  const cateringN = parseNum(catering);
   const wagesN = parseNum(wages);
   const repairsN = parseNum(repairs);
-  const totalSales = foodSales;
+  const totalSales = foodSales + cateringN;
   const foodCostTotal = foodLines.reduce((s, v) => s + (v.amount || 0), 0);
   const paperTotal = paperLines.reduce((s, v) => s + (v.amount || 0), 0);
   const totalCogs = wagesN + foodCostTotal + paperTotal + repairsN;
@@ -277,7 +278,31 @@ function WeeklyPnlPage() {
     clear();
   };
 
+  const cateringFn = useServerFn(getCateringSales);
   const handleRefresh = () => { pnlQ.refetch(); salesQ.refetch(); };
+  const handleToastRefresh = async () => {
+    if (!locationId || !fy || !week || dates.length !== 7) return;
+    setRefreshingToast(true);
+    try {
+      const res = await cateringFn({
+        data: {
+          location_ids: [locationId],
+          start_date: dates[0],
+          end_date: dates[6],
+          fiscal_year: fy,
+          weeks: [{ fiscal_week: week, start_date: dates[0], end_date: dates[6] }],
+        },
+      });
+      const total = (res.results ?? []).reduce((sum, r) => sum + Number(r.amount ?? 0), 0);
+      setCatering(total ? String(total) : "");
+      if ((res.errors ?? []).length > 0) toast.error(res.errors[0].message);
+      else toast.success("Toast catering actual loaded");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setRefreshingToast(false);
+    }
+  };
 
   const handleSave = async () => {
     if (!locationId || !fy || !week) return;
@@ -302,6 +327,7 @@ function WeeklyPnlPage() {
           location_id: locationId,
           fiscal_year: fy,
           fiscal_week: week,
+          catering: cateringN,
           wages: wagesN,
           repairs: repairsN,
           vendor_amounts,
