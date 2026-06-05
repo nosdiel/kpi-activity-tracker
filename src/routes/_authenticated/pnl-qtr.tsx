@@ -371,7 +371,7 @@ function QtrPage() {
               </tr>
             </thead>
             <tbody>
-              {groups.map((grp, gi) => (
+              {groups.map((grp) => (
                 grp.map((w, idx) => {
                   const row = rows.find((r) => r.week === w);
                   return (
