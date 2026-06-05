@@ -393,8 +393,26 @@ void toastAccessToken;
 void toastDayTotal;
 
 const toastBaseLocationColumns =
-  "id,name,toast_restaurant_guid,toast_client_id,toast_client_secret";
+  "id,name,toast_restaurant_guid,toast_client_id,toast_client_secret,toast_analytics_client_id,toast_analytics_client_secret";
 const toastExtendedLocationColumns = `${toastBaseLocationColumns},toast_api_url,toast_credential_name`;
+
+// Pick the right Toast credential pair, with fallback to the other if only one is set.
+// - "standard"  → Orders/Menu/Config API (toast_client_id/secret)
+// - "analytics" → Analytics era/v1 endpoints (toast_analytics_client_id/secret)
+function pickToastCreds(loc: any, kind: "standard" | "analytics"): { clientId: string; clientSecret: string } {
+  const std = { clientId: loc?.toast_client_id as string | null, clientSecret: loc?.toast_client_secret as string | null };
+  const ana = {
+    clientId: loc?.toast_analytics_client_id as string | null,
+    clientSecret: loc?.toast_analytics_client_secret as string | null,
+  };
+  const primary = kind === "analytics" ? ana : std;
+  const fallback = kind === "analytics" ? std : ana;
+  const chosen = primary.clientId && primary.clientSecret ? primary : fallback;
+  if (!chosen.clientId || !chosen.clientSecret) {
+    throw new Error(`Toast ${kind} credentials are not configured for this location`);
+  }
+  return { clientId: chosen.clientId, clientSecret: chosen.clientSecret };
+}
 
 function isMissingToastMetadataColumn(error: { message?: string; code?: string; details?: string } | null | undefined) {
   if (!error) return false;
@@ -1024,7 +1042,7 @@ async function fetchToastMenuItemsForDayInline(
 
 async function loadToastLocation(supabaseAdmin: any, locationId: string) {
   const baseColumns =
-    "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret";
+    "id,name,pos_provider,square_location_id,square_access_token,toast_restaurant_guid,toast_client_id,toast_client_secret,toast_analytics_client_id,toast_analytics_client_secret";
   const extendedColumns = `${baseColumns},toast_api_url`;
   let r = await supabaseAdmin.from("locations").select(extendedColumns).eq("id", locationId).maybeSingle();
   if (r.error && isMissingToastMetadataColumn(r.error)) {
