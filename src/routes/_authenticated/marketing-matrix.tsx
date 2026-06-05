@@ -169,7 +169,7 @@ function MarketingMatrixPage() {
             )}
             {menuQ.data && menuQ.data.items.length === 0 && !(menuQ.data as any)?.error && (
               <p className="text-xs text-muted-foreground">
-                Map items on the <a href="/trackable-items" className="underline">Trackable Items</a> page first.
+                Map items on the <a href="/desserts" className="underline">Trackable Items</a> page first.
                 The analysis uses each item's POS Product to match Toast Analytics Menu Reporting rows.
               </p>
             )}
