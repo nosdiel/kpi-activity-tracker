@@ -614,8 +614,12 @@ export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
     const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
 
     // Try the Orders API first (requires standard creds w/ orders:read).
+    const std = pickToastCreds(loc, "standard");
+    const ana = pickToastCreds(loc, "analytics");
+    const stdTag = `${std.clientId.slice(0, 6)}…${std.clientId.slice(-4)}`;
+    const anaTag = `${ana.clientId.slice(0, 6)}…${ana.clientId.slice(-4)}`;
+    const sameCred = std.clientId === ana.clientId;
     try {
-      const std = pickToastCreds(loc, "standard");
       const ordersTok = await toastAuth(base, std.clientId, std.clientSecret);
       const currentChecks = await fetchToastChecks(base, ordersTok, loc.toast_restaurant_guid, data.start_date, data.end_date);
       const priorChecks = await fetchToastChecks(base, ordersTok, loc.toast_restaurant_guid, prevStart, prevEnd);
@@ -633,9 +637,6 @@ export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
       if (!isPermissionError(e)) throw e;
       const stdErr = (e as Error)?.message ?? String(e);
       console.warn("[marketing-matrix] Toast Orders API blocked, falling back to Analytics:", stdErr);
-      // Analytics-only fallback: units sold + revenue by menu item, no basket data.
-      // Auth with the Analytics credential (separate client ID/secret).
-      const ana = pickToastCreds(loc, "analytics");
       const analyticsTok = await toastAuth(base, ana.clientId, ana.clientSecret);
       const [curRows, priorRows] = await Promise.all([
         toastAnalyticsItemRows(base, analyticsTok, loc.toast_restaurant_guid, data.start_date, data.end_date),
@@ -643,6 +644,9 @@ export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
       ]);
       const current = analyzeAnalyticsRows(curRows, data.item_name, data.start_date, data.end_date);
       const prior = analyzeAnalyticsRows(priorRows, data.item_name, prevStart, prevEnd);
+      const credLine = sameCred
+        ? `Standard & Analytics use the SAME client ID (${stdTag}) — Toast rejected it for /orders/v2/ordersBulk, so this client is missing the orders.read scope on Toast's side.`
+        : `Standard client ID used: ${stdTag} · Analytics client ID used: ${anaTag}. Standard client lacks orders.read scope on Toast's side.`;
       return {
         provider,
         location_name: loc.name,
@@ -650,11 +654,12 @@ export const runMarketBasketAnalysis = createServerFn({ method: "POST" })
         item_name: data.item_name,
         analytics_only: true,
         notice:
-          `Standard/Orders API call to Toast was rejected — showing Analytics Menu report only. Toast response: ${stdErr.slice(0, 240)}`,
+          `Standard/Orders API call to Toast was rejected — showing Analytics Menu report only. ${credLine} Toast response: ${stdErr.slice(0, 200)}`,
         current,
         prior,
       };
     }
+
 
   });
 
