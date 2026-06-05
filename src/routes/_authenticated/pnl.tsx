@@ -555,6 +555,64 @@ function WeeklyPnlPage() {
           </div>
         </div>
       </Card>
+
+      {diagResult && (
+        <Card>
+          <CardContent className="pt-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-semibold">Catering Toast Diagnostics</h3>
+                <p className="text-xs text-muted-foreground">
+                  {diagResult.location.name} · restaurantGuid {diagResult.location.restaurantGuid}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  POST {diagResult.endpoint} · reportRequestGuid {diagResult.reportRequestGuid} · {diagResult.rowCount} rows
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => setDiagResult(null)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <pre className="text-xs bg-muted/40 p-3 rounded overflow-x-auto">
+{JSON.stringify(diagResult.requestBody, null, 2)}
+            </pre>
+            {diagResult.rows.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Toast returned 0 rows for this window.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm border-collapse">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th className="py-2 pr-3">diningOption</th>
+                      <th className="py-2 pr-3 text-right">netSalesAmount</th>
+                      <th className="py-2 pr-3 text-right">grossSalesAmount</th>
+                      <th className="py-2 pr-3">businessDate</th>
+                      <th className="py-2 pr-3">restaurantGuid</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {diagResult.rows.map((r, i) => (
+                      <tr key={i} className="border-b">
+                        <td className="py-1.5 pr-3">{r.diningOption ?? <em className="text-muted-foreground">(none)</em>}</td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums">{r.netSalesAmount ?? "—"}</td>
+                        <td className="py-1.5 pr-3 text-right tabular-nums">{r.grossSalesAmount ?? "—"}</td>
+                        <td className="py-1.5 pr-3">{r.businessDate ?? "—"}</td>
+                        <td className="py-1.5 pr-3 font-mono text-xs">{r.restaurantGuid}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <details className="text-xs">
+              <summary className="cursor-pointer text-muted-foreground">Raw rows JSON</summary>
+              <pre className="bg-muted/40 p-3 rounded overflow-x-auto mt-2">
+{diagResult.rows.map((r) => r.raw).join("\n")}
+              </pre>
+            </details>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
