@@ -311,6 +311,7 @@ function MarketingMatrixPage() {
             </CardContent>
           </Card>
 
+          {!result.analytics_only && (
           <Card>
             <CardHeader>
               <CardTitle>Top co-purchased items</CardTitle>
