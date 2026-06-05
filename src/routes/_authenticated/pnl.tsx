@@ -111,6 +111,22 @@ function WeeklyPnlPage() {
   const [week, setWeek] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [refreshingToast, setRefreshingToast] = useState(false);
+  const [diagLoading, setDiagLoading] = useState(false);
+  const [diagResult, setDiagResult] = useState<null | {
+    location: { id: string; name: string; restaurantGuid: string };
+    endpoint: string;
+    requestBody: unknown;
+    reportRequestGuid: string;
+    rowCount: number;
+    rows: Array<{
+      diningOption: string | null;
+      netSalesAmount: number | null;
+      grossSalesAmount: number | null;
+      businessDate: string | null;
+      restaurantGuid: string;
+      raw: string;
+    }>;
+  }>(null);
 
   // Editable state
   const [catering, setCatering] = useState("");
