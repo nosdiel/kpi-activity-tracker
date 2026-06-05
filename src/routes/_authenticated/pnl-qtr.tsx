@@ -297,7 +297,10 @@ function QtrPage() {
     salesQ.refetch();
   };
 
-  const locName = filteredLocations.find((l) => l.id === locationId)?.name ?? "—";
+  const locName =
+    locationId === "all"
+      ? `All locations${regionFilter === "all" ? "" : ` · ${regionFilter}`}`
+      : (filteredLocations.find((l) => l.id === locationId)?.name ?? "—");
 
 
   return (
