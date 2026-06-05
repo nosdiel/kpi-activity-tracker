@@ -295,6 +295,23 @@ function WeeklyPnlPage() {
   };
 
   const cateringFn = useServerFn(getCateringSales);
+  const diagFn = useServerFn(getToastCateringDiagnostics);
+  const handleToastDiagnostics = async () => {
+    if (!locationId || dates.length !== 7) return;
+    setDiagLoading(true);
+    setDiagResult(null);
+    try {
+      const res = await diagFn({
+        data: { location_id: locationId, start_date: dates[0], end_date: dates[6] },
+      });
+      setDiagResult(res);
+      toast.success(`Toast returned ${res.rowCount} rows`);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setDiagLoading(false);
+    }
+  };
   const handleRefresh = () => { pnlQ.refetch(); salesQ.refetch(); };
   const handleToastRefresh = async () => {
     if (!locationId || !fy || !week || dates.length !== 7) return;
