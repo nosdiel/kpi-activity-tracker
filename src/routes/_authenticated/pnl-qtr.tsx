@@ -337,6 +337,7 @@ function QtrPage() {
     targetsQ.refetch();
     pnlQ.refetch();
     salesQ.refetch();
+    cateringQ.refetch();
   };
 
   const locName =
