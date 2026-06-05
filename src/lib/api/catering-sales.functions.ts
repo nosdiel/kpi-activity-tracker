@@ -151,7 +151,7 @@ async function createToastDiningMetricsReport(
     `${base}/era/v1/metrics/${range}`,
     {
       method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json", "Toast-Restaurant-External-ID": restaurantGuid },
+      headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
       body: JSON.stringify({
         startBusinessDate: compactBusinessDate(startDate),
         endBusinessDate: compactBusinessDate(endDate),
