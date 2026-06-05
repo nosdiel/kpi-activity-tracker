@@ -56,10 +56,17 @@ const parseNum = (s: string) => {
   return Number.isFinite(n) ? n : 0;
 };
 const withFY2027 = (rows: FY[] = []) => {
-  if (rows.some((r) => r.fiscal_year === 2027)) return rows;
-  const fy2026 = rows.find((r) => r.fiscal_year === 2026);
-  const start_date = fy2026 ? shiftISODate(fy2026.start_date, 364) : "2026-12-27";
-  return [{ fiscal_year: 2027, start_date }, ...rows].sort((a, b) => b.fiscal_year - a.fiscal_year);
+  const map = new Map(rows.map((r) => [r.fiscal_year, r.start_date]));
+  if (!map.has(2027)) {
+    const fy2026 = map.get(2026);
+    map.set(2027, fy2026 ? shiftISODate(fy2026, 364) : "2026-12-27");
+  }
+  for (let y = 2026; y >= 2020; y--) {
+    if (!map.has(y)) map.set(y, shiftISODate(map.get(y + 1)!, -364));
+  }
+  return Array.from(map.entries())
+    .map(([fiscal_year, start_date]) => ({ fiscal_year, start_date }))
+    .sort((a, b) => b.fiscal_year - a.fiscal_year);
 };
 const defaultFiscalYear = (rows: FY[]) => {
   const today = new Date().toISOString().slice(0, 10);
