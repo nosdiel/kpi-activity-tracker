@@ -162,6 +162,11 @@ function MarketingMatrixPage() {
                 Failed to load POS menu: {(menuQ.error as Error).message}
               </p>
             )}
+            {(menuQ.data as any)?.error && (
+              <p className="text-xs text-destructive">
+                POS menu error: {(menuQ.data as any).error}
+              </p>
+            )}
           </div>
 
           <div className="space-y-1.5">
