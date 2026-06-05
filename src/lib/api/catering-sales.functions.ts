@@ -160,7 +160,7 @@ async function createToastDiningMetricsReport(
         groupBy: ["DINING_OPTION"],
       }),
     },
-    8_000
+    20_000
   );
   if (res.status === 429) throw new ToastRateLimitError();
   if (!res.ok) {
@@ -282,6 +282,50 @@ function diningRowsToCatering(rows: ToastDiningMetricsRow[], locationId: string,
     centsByDate.set(businessDate, (centsByDate.get(businessDate) ?? 0) + cents);
   }
   return [...centsByDate.entries()].map(([business_date, cents]) => ({ location_id: locationId, business_date, amount: cents / 100 }));
+}
+
+function cateringBreakdownCents(rows: ToastDiningMetricsRow[], startDate: string, endDate: string): Array<{ business_date: string; amount_cents: number }> {
+  const centsByDate = new Map(isoRangeDates(startDate, endDate).map((d) => [d, 0]));
+  for (const row of rows) {
+    if (diningOptionLabel(row).trim().toLowerCase() !== "catering") continue;
+    const businessDate = isoFromToastBusinessDate(row.businessDate ?? row.date);
+    if (!centsByDate.has(businessDate)) continue;
+    const net = Number(row.netSalesAmount ?? 0);
+    if (!Number.isFinite(net)) continue;
+    centsByDate.set(businessDate, (centsByDate.get(businessDate) ?? 0) + Math.round(net * 100));
+  }
+  return [...centsByDate.entries()].map(([business_date, amount_cents]) => ({ business_date, amount_cents }));
+}
+
+async function saveWeeklyCateringActuals(
+  supabaseAdmin: any,
+  locationId: string,
+  fiscalYear: number | undefined,
+  weeks: CateringWeekInput[],
+  days: CateringDay[]
+): Promise<void> {
+  if (!fiscalYear) return;
+  const rows = weeks.flatMap((week) => {
+    if (!week.fiscal_week) return [];
+    const cents = days.reduce((sum, day) => {
+      if (day.location_id !== locationId) return sum;
+      if (day.business_date < week.start_date || day.business_date > week.end_date) return sum;
+      return sum + Math.round(Number(day.amount ?? 0) * 100);
+    }, 0);
+    return [{
+      location_id: locationId,
+      fiscal_year: fiscalYear,
+      fiscal_week: week.fiscal_week,
+      week_start_date: week.start_date,
+      catering: cents / 100,
+      updated_at: new Date().toISOString(),
+    }];
+  });
+  if (rows.length === 0) return;
+  const { error } = await supabaseAdmin
+    .from("weekly_pnl")
+    .upsert(rows, { onConflict: "location_id,fiscal_year,fiscal_week" });
+  if (error) throw new Error(error.message);
 }
 
 function diningOptionLabel(row: ToastDiningMetricsRow): string {
@@ -467,39 +511,23 @@ export const getCateringSales = createServerFn({ method: "POST" })
           }
         } else if (loc.pos_provider === "toast" && loc.toast_restaurant_guid) {
           const base = (loc.toast_api_url || TOAST_BASE).replace(/\/+$/, "");
-          const creds = pickToastCreds(loc);
-          if (!creds) throw new Error("Toast credentials not configured");
+          const creds = pickToastCreds(loc, { analyticsOnly: true });
+          if (!creds) throw new Error("Toast Analytics credentials not configured");
           const token = await toastAccessToken(base, creds.clientId, creds.clientSecret);
-          try {
-            for (const week of requestedWeeks) {
-              locResults.push(
-                ...(await toastCateringRangeByDiningOption(
-                  supabaseAdmin,
-                  base,
-                  token,
-                  loc.toast_restaurant_guid,
-                  loc.id,
-                  week.start_date,
-                  week.end_date,
-                  data.fiscal_year,
-                  week.fiscal_week
-                ))
-              );
-            }
-          } catch (metricsError) {
-            if ((metricsError as any)?.rateLimited) throw metricsError;
-            try {
-              const cateringGuids = await toastCateringDiningOptionGuids(base, token, loc.toast_restaurant_guid);
-              for (const week of requestedWeeks) {
-                for (const d of isoRangeDates(week.start_date, week.end_date)) {
-                  const amt = await toastCateringDay(base, token, loc.toast_restaurant_guid, d, cateringGuids);
-                  if (amt > 0) locResults.push({ location_id: loc.id, business_date: d, amount: amt });
-                }
-              }
-            } catch {
-              throw metricsError;
-            }
-            if (locResults.length === 0) throw metricsError;
+          for (const week of requestedWeeks) {
+            locResults.push(
+              ...(await toastCateringRangeByDiningOption(
+                supabaseAdmin,
+                base,
+                token,
+                loc.toast_restaurant_guid,
+                loc.id,
+                week.start_date,
+                week.end_date,
+                data.fiscal_year,
+                week.fiscal_week
+              ))
+            );
           }
         }
       } catch (e) {
@@ -508,6 +536,13 @@ export const getCateringSales = createServerFn({ method: "POST" })
           locErrors.push({ location_id: loc.id, message: "Toast rate limit reached, try again later." });
         } else {
           locErrors.push({ location_id: loc.id, message: (e as Error).message });
+        }
+      }
+      if (locErrors.length === 0 && data.fiscal_year && requestedWeeks.some((w) => w.fiscal_week)) {
+        try {
+          await saveWeeklyCateringActuals(supabaseAdmin, loc.id, data.fiscal_year, requestedWeeks, locResults);
+        } catch (e) {
+          locErrors.push({ location_id: loc.id, message: `Unable to save catering actuals: ${(e as Error).message}` });
         }
       }
       perLocation.push({ results: locResults, errors: locErrors });
@@ -528,6 +563,8 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
         location_id: z.string().uuid(),
         start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
         end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+        fiscal_year: z.number().int().optional(),
+        fiscal_week: z.number().int().min(1).max(53).optional(),
       })
       .parse(input)
   )
@@ -562,6 +599,12 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
       createToastDiningMetricsReport(base, token, loc.toast_restaurant_guid!, data.start_date, data.end_date, true)
     );
     const rows = await fetchToastDiningMetricsReport(base, token, guid);
+    if (data.fiscal_year && data.fiscal_week) {
+      const reportType = diningReportType(data.start_date, data.end_date, data.fiscal_year, data.fiscal_week);
+      await writeCachedDiningRows(supabaseAdmin, loc.id, data.start_date, data.fiscal_year, data.fiscal_week, reportType, guid, rows).catch(() => undefined);
+      const days = diningRowsToCatering(rows, loc.id, data.start_date);
+      await saveWeeklyCateringActuals(supabaseAdmin, loc.id, data.fiscal_year, [{ fiscal_week: data.fiscal_week, start_date: data.start_date, end_date: data.end_date }], days);
+    }
 
     const normalized = rows.map((r) => ({
       diningOption: diningOptionLabel(r) || null,
@@ -571,6 +614,7 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
       restaurantGuid: loc.toast_restaurant_guid,
       raw: JSON.stringify(r),
     }));
+    const cateringBreakdown = cateringBreakdownCents(rows, data.start_date, data.end_date);
 
     return {
       location: { id: loc.id, name: loc.name, restaurantGuid: loc.toast_restaurant_guid },
@@ -578,6 +622,8 @@ export const getToastCateringDiagnostics = createServerFn({ method: "POST" })
       requestBody,
       reportRequestGuid: guid,
       rowCount: rows.length,
+      cateringNetTotalCents: cateringBreakdown.reduce((sum, d) => sum + d.amount_cents, 0),
+      cateringBreakdown,
       rows: normalized,
     };
   });
