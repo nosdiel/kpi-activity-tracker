@@ -70,7 +70,10 @@ function LocationsPage() {
   const q = useQuery({
     queryKey: ["locations", "all"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("locations").select("*").order("name");
+      const { data, error } = await supabase
+        .from("locations")
+        .select("id,name,region,timezone,address,active,payroll_pct_of_sales,food_cost_pct_of_sales,paper_goods_pct_of_sales")
+        .order("name");
       if (error) throw error;
       return (data ?? []) as LocationRow[];
     },
