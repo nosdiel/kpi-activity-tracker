@@ -120,6 +120,18 @@ function LocationsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("locations").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Location deleted");
+      qc.invalidateQueries({ queryKey: ["locations"] });
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const openNew = () => { setForm(emptyForm); setOpen(true); };
   const openEdit = (row: LocationRow) => {
     setForm({
