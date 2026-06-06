@@ -173,7 +173,7 @@ function LocationsPage() {
               <TableHead>Timezone</TableHead>
               <TableHead>Address</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-[60px]"></TableHead>
+              <TableHead className="w-[100px]"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
